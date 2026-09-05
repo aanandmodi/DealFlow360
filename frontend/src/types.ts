@@ -153,3 +153,30 @@ export interface ApproveResult {
   finance_approved: boolean;
   message: string;
 }
+
+export interface PipelineSummary {
+  total_quotations: number;
+  active_pipeline_value: number;
+  active_pipeline_count: number;
+  pending_approvals: number;
+  at_risk_count: number;
+  closed_won_value?: number;
+  closed_won_count?: number;
+  pipeline_by_status: Record<string, { count: number; total: number }>;
+}
+
+export interface QuotationListItem {
+  id: number;
+  quote_number: string;
+  customer_name: string;
+  customer_tier: string;
+  customer_company?: string;
+  rep_name: string;
+  status: string;
+  blended_risk_score: number;
+  total_amount: number;
+  margin_pct: number;
+  line_count: number;
+  created_at: string;
+  updated_at: string;
+}

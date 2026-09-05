@@ -1,1 +1,1 @@
-# Core app — Auth, User/Role, shared models
+# Core app

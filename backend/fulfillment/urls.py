@@ -1,4 +1,4 @@
-# Fulfillment URLs — Person B fills these in
 from django.urls import path
 
+# Person B will add fulfillment endpoints here
 urlpatterns = []

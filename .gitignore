@@ -1,39 +1,42 @@
-# === Python / Django ===
+# Python
 __pycache__/
 *.py[cod]
-*.so
 *.egg-info/
 dist/
 build/
 *.egg
-.venv/
-venv/
-env/
-*.sqlite3
-db.sqlite3
+.eggs/
+*.so
+
+# Django
 *.log
+db.sqlite3
 media/
 staticfiles/
 
-# === Node / React ===
-node_modules/
-frontend/dist/
-frontend/.vite/
-*.tsbuildinfo
-
-# === Environment ===
+# Environment
 .env
-.env.local
-.env.*.local
+!.env.example
+venv/
+.venv/
 
-# === IDE ===
+# Node
+node_modules/
+frontend/node_modules/
+
+# Vite
+frontend/dist/
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
 Thumbs.db
 
-# === Docker ===
+# Docker
 pgdata/

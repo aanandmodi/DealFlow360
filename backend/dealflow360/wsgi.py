@@ -1,5 +1,6 @@
-"""WSGI config for DealFlow360 project."""
-
+"""
+WSGI config for DealFlow360 project.
+"""
 import os
 from django.core.wsgi import get_wsgi_application
 

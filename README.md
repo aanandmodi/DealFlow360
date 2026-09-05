@@ -577,6 +577,29 @@ The frontend will be available at `http://localhost:5173/`.
 | `POST` | `/api/quotations/{id}/return/` | Return quotation to rep for revision | Yes (JWT) |
 | `GET` | `/api/quotations/{id}/risk-score/` | Diagnostic breakdown of risk metrics | Yes (JWT) |
 
+### Customer Negotiation Portal (`/api/portal/`) — Built by Person C
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/portal/quotations/{token}/` | View quotation details via public magic token | No (Token auth) |
+| `POST` | `/api/portal/quotations/{token}/accept/` | Customer digitally signs & accepts quote | No (Token auth) |
+| `POST` | `/api/portal/quotations/{token}/reject/` | Customer declines quote with feedback | No (Token auth) |
+| `POST` | `/api/portal/quotations/{token}/counter/` | Propose counter-offer (re-triggers approval if limit breached) | No (Token auth) |
+| `GET` | `/api/portal/quotations/{token}/history/` | Full negotiation audit log & event trail | No (Token auth) |
+
+### Deal Health & Pipeline Analytics (`/api/dashboard/` & `/api/quotations/`) — Built by Person C
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/quotations/pipeline-summary/` | Aggregate pipeline stages, SLA health, revenue KPIs | Yes (JWT) |
+| `GET` | `/api/dashboard/summary/` | Pipeline health metrics, anomaly counts, win rates, margin % | Yes (JWT) |
+| `GET` | `/api/dashboard/stalled-deals/` | List of inactive or aging deals exceeding SLA thresholds | Yes (JWT) |
+| `GET` | `/api/dashboard/anomalies/` | Outlier quotations with heavy discount breaches | Yes (JWT) |
+| `GET` | `/api/dashboard/slippage/` | Quotations suffering margin erosion | Yes (JWT) |
+
+#### Generate Customer Portal Magic Token (CLI)
+```bash
+python backend/manage.py generate_portal_token <quotation_id>
+```
+
 ---
 
 ## License

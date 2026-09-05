@@ -1,52 +1,40 @@
 /**
- * Auth API — login, register, me.
+ * Auth API — login, register, refresh, current user.
  */
+import { ApiClient } from './client';
 
-import { apiClient, setTokens, clearTokens } from './client';
-
-export interface LoginResponse {
-  access: string;
-  refresh: string;
-}
-
-export interface User {
+// Use a type alias with a runtime dummy to ensure esbuild keeps the export
+export type User = {
   id: number;
   username: string;
   email: string;
   first_name: string;
   last_name: string;
-  role: string;
-}
+  role: 'admin' | 'sales_rep' | 'sales_manager' | 'finance' | 'customer';
+  phone: string;
+  avatar_url: string;
+};
 
-export async function login(username: string, password: string): Promise<User> {
-  const tokens = await apiClient<LoginResponse>('/auth/login/', {
-    method: 'POST',
-    body: JSON.stringify({ username, password }),
-  });
-  setTokens(tokens.access, tokens.refresh);
-  return fetchMe();
-}
+export type AuthResponse = {
+  user: User;
+  tokens: {
+    access: string;
+    refresh: string;
+  };
+};
 
-export async function register(data: {
-  username: string;
-  email: string;
-  password: string;
-  first_name: string;
-  last_name: string;
-  role?: string;
-}): Promise<User> {
-  await apiClient('/auth/register/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  return login(data.username, data.password);
-}
+export const authApi = {
+  login: (username: string, password: string) =>
+    ApiClient.post<AuthResponse>('/auth/login/', { username, password }),
 
-export function fetchMe() {
-  return apiClient<User>('/auth/me/');
-}
+  register: (data: { username: string; email: string; password: string; first_name: string; last_name: string; role: string }) =>
+    ApiClient.post<AuthResponse>('/auth/register/', data),
 
-export function logout() {
-  clearTokens();
-  window.location.href = '/login';
-}
+  me: () => ApiClient.get<User>('/auth/me/'),
+
+  users: (role?: string) => ApiClient.get<User[]>(`/auth/users/${role ? `?role=${role}` : ''}`),
+};
+
+export const login = authApi.login;
+export const register = authApi.register;
+export const me = authApi.me;

@@ -1,4 +1,4 @@
-# Billing URLs — Person B fills these in
 from django.urls import path
 
+# Person B will add billing endpoints here
 urlpatterns = []

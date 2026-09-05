@@ -1,15 +1,22 @@
 /**
- * Quotations API — all quotation-related API calls.
+ * Quotations API — Unified client supporting Person A (CPQ & Approvals) and Person C (Pipeline & Analytics).
  */
-
-import { apiClient } from './client';
+import { ApiClient, apiClient } from './client';
 import type {
   Quotation, QuotationLine, QuotationCreate,
   QuotationLineCreate, RiskScoreResult, ApprovalLog,
-  SubmitResult, ApproveResult,
+  SubmitResult, ApproveResult, PipelineSummary,
+  QuotationListItem, Customer, Product,
 } from '../types';
 
-// === Quotation CRUD ===
+export type {
+  Quotation, QuotationLine, QuotationCreate,
+  QuotationLineCreate, RiskScoreResult, ApprovalLog,
+  SubmitResult, ApproveResult, PipelineSummary,
+  QuotationListItem, Customer, Product,
+};
+
+// === Quotation CRUD (Person A) ===
 
 export function fetchQuotations(params?: Record<string, string>) {
   return apiClient<{ results: Quotation[]; count: number }>('/quotations/', { params });
@@ -37,7 +44,7 @@ export function deleteQuotation(id: number) {
   return apiClient(`/quotations/${id}/`, { method: 'DELETE' });
 }
 
-// === Line Items ===
+// === Line Items (Person A) ===
 
 export function addLine(quotationId: number, data: QuotationLineCreate) {
   return apiClient<QuotationLine>(`/quotations/${quotationId}/lines/`, {
@@ -57,7 +64,7 @@ export function deleteLine(quotationId: number, lineId: number) {
   return apiClient(`/quotations/${quotationId}/lines/${lineId}/`, { method: 'DELETE' });
 }
 
-// === State Machine Actions ===
+// === State Machine Actions (Person A) ===
 
 export function submitQuotation(id: number) {
   return apiClient<SubmitResult>(`/quotations/${id}/submit/`, { method: 'POST' });
@@ -88,19 +95,19 @@ export function confirmQuotation(id: number) {
   return apiClient(`/quotations/${id}/confirm/`, { method: 'POST' });
 }
 
-// === Risk Score ===
+// === Risk Score (Person A) ===
 
 export function fetchRiskScore(id: number) {
   return apiClient<RiskScoreResult>(`/quotations/${id}/risk-score/`);
 }
 
-// === Approval Logs ===
+// === Approval Logs (Person A) ===
 
 export function fetchApprovalLogs(quotationId: number) {
   return apiClient<ApprovalLog[]>(`/quotations/${quotationId}/logs/`);
 }
 
-// === Config ===
+// === Config & Catalogs ===
 
 export function fetchDiscountTiers() {
   return apiClient<{ results: { id: number; tier_key: string; name: string; max_discount_percent: string }[] }>(
@@ -109,13 +116,39 @@ export function fetchDiscountTiers() {
 }
 
 export function fetchProducts(params?: Record<string, string>) {
-  return apiClient<{ results: { id: number; name: string; sku: string; category: number; category_name: string; base_price: string; unit: string; tax_rate: string; is_subscription: boolean }[] }>(
-    '/auth/products/', { params }
+  return apiClient<{ results: Product[] }>(
+    '/products/', { params }
   );
 }
 
 export function fetchCustomers(params?: Record<string, string>) {
-  return apiClient<{ results: { id: number; name: string; company: string; email: string; tier: string; tier_display: string }[] }>(
-    '/auth/customers/', { params }
+  return apiClient<{ results: Customer[] }>(
+    '/customers/', { params }
   );
 }
+
+// === Person C Object-style API ===
+
+export const quotationsApi = {
+  list: (params?: { status?: string; rep?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.rep) query.set('rep', params.rep);
+    const qs = query.toString();
+    return ApiClient.get<QuotationListItem[]>(`/quotations/${qs ? `?${qs}` : ''}`);
+  },
+
+  detail: (id: number) => ApiClient.get<Quotation>(`/quotations/${id}/`),
+
+  create: (data: { customer_id: number; notes?: string }) =>
+    ApiClient.post<Quotation>('/quotations/create/', data),
+
+  submit: (id: number) => ApiClient.post<Quotation>(`/quotations/${id}/submit/`),
+
+  pipelineSummary: () => ApiClient.get<PipelineSummary>('/quotations/pipeline-summary/'),
+
+  customers: () => ApiClient.get<Customer[]>('/customers/'),
+
+  products: (category?: string) =>
+    ApiClient.get<Product[]>(`/products/${category ? `?category=${category}` : ''}`),
+};

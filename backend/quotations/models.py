@@ -1,148 +1,180 @@
 """
-Quotations app models — Person A: Core Deal Engine.
-
-Models:
-- DiscountTier: customer tier discount limits (Bronze/Silver/Gold)
-- CategoryDiscountCeiling: per-category discount limits per tier
-- ApprovalChain: maps overage ranges to approval levels
-- Quotation: the deal itself with status state machine
-- QuotationLine: individual line items on a quotation
-- ApprovalLog: full audit trail of approval actions
+Quotations app — Core Deal Engine models.
+Person A owns this app. Person C created these stubs for Admin/Portal/Dashboard integration.
+Person A will expand these with full business logic.
 """
-
 from django.db import models
 from django.conf import settings
-from decimal import Decimal
 
 
-class DiscountTier(models.Model):
-    """
-    Customer-tier-level discount ceiling.
-    E.g. Bronze ≤5%, Silver ≤10%, Gold ≤15%.
-    Links to Customer.tier choices via the `tier_key` field.
-    """
+class Customer(models.Model):
+    """Customer entity with tier-based pricing."""
 
-    tier_key = models.CharField(
-        max_length=10,
-        unique=True,
-        help_text='Must match Customer.Tier choices: bronze, silver, gold',
+    class Tier(models.TextChoices):
+        BRONZE = 'bronze', 'Bronze'
+        SILVER = 'silver', 'Silver'
+        GOLD = 'gold', 'Gold'
+
+    name = models.CharField(max_length=200)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20, blank=True)
+    company = models.CharField(max_length=200, blank=True)
+    address = models.TextField(blank=True)
+    tier = models.CharField(max_length=10, choices=Tier.choices, default=Tier.BRONZE, db_index=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='customer_profile',
     )
-    name = models.CharField(max_length=50)
-    max_discount_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'quotations_discount_tier'
-        ordering = ['max_discount_percent']
+        db_table = 'quotations_customer'
+        ordering = ['name']
 
     def __str__(self):
-        return f"{self.name} (≤{self.max_discount_percent}%)"
+        return f"{self.name} ({self.get_tier_display()})"
 
 
-class CategoryDiscountCeiling(models.Model):
-    """
-    Per-category, per-tier discount ceiling override.
-    E.g. Gold + Hardware = 15%, Gold + Services = 10%.
-    If no category ceiling exists, falls back to DiscountTier.max_discount_percent.
-    """
+class Product(models.Model):
+    """Product catalog entry."""
 
-    category = models.ForeignKey(
-        'core.ProductCategory',
-        on_delete=models.CASCADE,
-        related_name='discount_ceilings',
-    )
-    discount_tier = models.ForeignKey(
-        DiscountTier,
-        on_delete=models.CASCADE,
-        related_name='category_ceilings',
-    )
-    max_discount_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    class Category(models.TextChoices):
+        HARDWARE = 'hardware', 'Hardware'
+        SERVICES = 'services', 'Services'
+        SUBSCRIPTIONS = 'subscriptions', 'Subscriptions'
+        SOFTWARE = 'software', 'Software'
+
+    name = models.CharField(max_length=200)
+    sku = models.CharField(max_length=50, unique=True, blank=True)
+    category = models.CharField(max_length=20, choices=Category.choices, db_index=True)
+    base_price = models.DecimalField(max_digits=12, decimal_places=2)
+    unit = models.CharField(max_length=20, default='unit')
+    tax_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    description = models.TextField(blank=True)
+    is_subscription = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'quotations_category_discount_ceiling'
-        unique_together = ['category', 'discount_tier']
-        ordering = ['discount_tier', 'category']
+        db_table = 'quotations_product'
+        ordering = ['name']
 
     def __str__(self):
-        return f"{self.discount_tier.name} / {self.category.name}: ≤{self.max_discount_percent}%"
+        return f"{self.name} ({self.get_category_display()}) — ${self.base_price}"
 
 
-class ApprovalChain(models.Model):
-    """
-    Maps blended overage score ranges to approval requirements.
-    E.g. 0-5 = Manager only, 5+ = Manager + Finance.
-    """
+class ProductVariant(models.Model):
+    """Product variant with attribute/value and extra price."""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
+    attribute = models.CharField(max_length=100)  # e.g. "RAM", "Color"
+    value = models.CharField(max_length=100)  # e.g. "32GB", "Black"
+    extra_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
+    class Meta:
+        db_table = 'quotations_product_variant'
+
+    def __str__(self):
+        return f"{self.product.name}: {self.attribute}={self.value} (+${self.extra_price})"
+
+
+class PriceList(models.Model):
+    """Tier-based price list."""
     name = models.CharField(max_length=100)
-    min_overage_threshold = models.DecimalField(
-        max_digits=5, decimal_places=2,
-        help_text='Minimum blended overage score for this chain step',
-    )
-    max_overage_threshold = models.DecimalField(
-        max_digits=5, decimal_places=2,
-        help_text='Maximum blended overage score for this chain step',
-    )
-    requires_finance = models.BooleanField(
-        default=False,
-        help_text='If True, needs Finance approval after Manager',
-    )
+    tier = models.CharField(max_length=10, choices=Customer.Tier.choices)
+    currency = models.CharField(max_length=3, default='USD')
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'quotations_approval_chain'
-        ordering = ['min_overage_threshold']
+        db_table = 'quotations_price_list'
 
     def __str__(self):
-        level = 'Manager + Finance' if self.requires_finance else 'Manager only'
-        return f"{self.name}: {self.min_overage_threshold}–{self.max_overage_threshold} → {level}"
+        return f"{self.name} ({self.get_tier_display()} — {self.currency})"
+
+
+class PriceListItem(models.Model):
+    """Per-product pricing override within a price list."""
+    price_list = models.ForeignKey(PriceList, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='price_list_items')
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        db_table = 'quotations_price_list_item'
+        unique_together = ('price_list', 'product')
+
+    def __str__(self):
+        return f"{self.price_list.name} — {self.product.name}: ${self.price}"
+
+
+class DiscountTier(models.Model):
+    """Discount ceiling per customer tier AND product category."""
+    tier = models.CharField(max_length=10, choices=Customer.Tier.choices, db_index=True)
+    category = models.CharField(max_length=20, choices=Product.Category.choices, db_index=True)
+    max_discount_pct = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        db_table = 'quotations_discount_tier'
+        unique_together = ('tier', 'category')
+        ordering = ['tier', 'category']
+
+    def __str__(self):
+        return f"{self.get_tier_display()} / {self.get_category_display()}: max {self.max_discount_pct}%"
+
+
+class ApprovalChainRule(models.Model):
+    """Defines which approval steps are required for a given overage range."""
+    name = models.CharField(max_length=100)
+    min_over_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    max_over_pct = models.DecimalField(max_digits=5, decimal_places=2, default=100)
+    requires_manager = models.BooleanField(default=True)
+    requires_finance = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'quotations_approval_chain_rule'
+        ordering = ['min_over_pct']
+
+    def __str__(self):
+        steps = 'Manager'
+        if self.requires_finance:
+            steps += ' → Finance'
+        return f"{self.name}: {self.min_over_pct}–{self.max_over_pct}% → {steps}"
 
 
 class Quotation(models.Model):
-    """
-    The core deal object. Status follows a state machine:
-    Draft → PendingApproval → Approved/Rejected → Confirmed → UnderNegotiation
-    """
+    """Core quotation/deal entity."""
 
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Draft'
         PENDING_APPROVAL = 'pending_approval', 'Pending Approval'
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected'
-        CONFIRMED = 'confirmed', 'Confirmed'
+        SENT = 'sent', 'Sent'
         UNDER_NEGOTIATION = 'under_negotiation', 'Under Negotiation'
+        CONFIRMED = 'confirmed', 'Confirmed'
+        CANCELLED = 'cancelled', 'Cancelled'
+        FULFILLMENT = 'fulfillment', 'Fulfillment'
+        INVOICED = 'invoiced', 'Invoiced'
+        PAID = 'paid', 'Paid'
 
-    class ApprovalLevel(models.TextChoices):
-        NONE = 'none', 'No Approval Needed'
-        MANAGER = 'manager', 'Manager Only'
-        MANAGER_FINANCE = 'manager_finance', 'Manager + Finance'
-
-    customer = models.ForeignKey(
-        'core.Customer',
-        on_delete=models.PROTECT,
-        related_name='quotations',
-    )
-    sales_rep = models.ForeignKey(
+    quote_number = models.CharField(max_length=20, unique=True, db_index=True)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='quotations')
+    rep = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name='quotations',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='quotations_as_rep',
     )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.DRAFT,
+        db_index=True,
     )
-    blended_risk_score = models.DecimalField(
-        max_digits=8, decimal_places=4, default=0,
-        help_text='Computed by risk_score service on submit',
-    )
-    required_approval_level = models.CharField(
-        max_length=20,
-        choices=ApprovalLevel.choices,
-        default=ApprovalLevel.NONE,
-    )
-    manager_approved = models.BooleanField(default=False)
-    finance_approved = models.BooleanField(default=False)
+    blended_risk_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
-    payment_terms = models.CharField(max_length=50, default='Net 30 Days')
+    valid_until = models.DateField(null=True, blank=True)
+    portal_token = models.CharField(max_length=100, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -151,139 +183,82 @@ class Quotation(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Q-{self.pk} ({self.customer.name}) — {self.get_status_display()}"
+        return f"{self.quote_number} — {self.customer.name} ({self.get_status_display()})"
 
     @property
-    def subtotal(self):
-        """Sum of all line totals before tax."""
+    def total_amount(self):
         return sum(line.line_total for line in self.lines.all())
 
     @property
-    def total_discount_amount(self):
-        """Sum of all discount amounts across lines."""
+    def total_discount(self):
         return sum(line.discount_amount for line in self.lines.all())
 
     @property
-    def tax_amount(self):
-        """Sum of estimated tax across lines."""
-        return sum(line.tax_amount for line in self.lines.all())
-
-    @property
-    def total(self):
-        """Grand total including tax."""
-        return self.subtotal + self.tax_amount
-
-    @property
-    def gross_total(self):
-        """Total before any discounts."""
-        return sum(line.gross_total for line in self.lines.all())
-
-    @property
-    def blended_discount_percent(self):
-        """Weighted average discount across all lines."""
-        gross = self.gross_total
-        if gross == 0:
-            return Decimal('0')
-        return (self.total_discount_amount / gross * 100).quantize(Decimal('0.01'))
-
-    @property
-    def blended_margin_percent(self):
-        """Placeholder margin — assumes 40% base cost for demo purposes."""
-        if self.subtotal == 0:
-            return Decimal('0')
-        cost = self.gross_total * Decimal('0.60')  # 40% margin assumption
-        margin = (self.subtotal - cost) / self.subtotal * 100
-        return margin.quantize(Decimal('0.01'))
+    def margin_pct(self):
+        total = self.total_amount
+        if total == 0:
+            return 0
+        from decimal import Decimal
+        cost = sum(float(line.qty * line.unit_price) * 0.65 for line in self.lines.all())
+        return round(((float(total) - cost) / float(total)) * 100, 1)
 
 
 class QuotationLine(models.Model):
     """Individual line item on a quotation."""
-
-    quotation = models.ForeignKey(
-        Quotation,
-        on_delete=models.CASCADE,
-        related_name='lines',
-    )
-    product = models.ForeignKey(
-        'core.Product',
-        on_delete=models.PROTECT,
-        related_name='quotation_lines',
-    )
-    quantity = models.PositiveIntegerField(default=1)
+    quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='lines')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='quotation_lines')
+    description = models.CharField(max_length=300, blank=True)
+    qty = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
-    discount_percent = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0,
-    )
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    line_limit_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    is_subscription = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'quotations_quotation_line'
-        ordering = ['pk']
+        ordering = ['id']
 
     def __str__(self):
-        return f"{self.product.name} ×{self.quantity} @ {self.discount_percent}% off"
-
-    @property
-    def gross_total(self):
-        """Total before discount."""
-        return self.unit_price * self.quantity
-
-    @property
-    def discount_amount(self):
-        """Dollar discount on this line."""
-        return self.gross_total * self.discount_percent / 100
-
-    @property
-    def net_price(self):
-        """Unit price after discount."""
-        return self.unit_price * (1 - self.discount_percent / 100)
+        return f"{self.product.name} x{self.qty} @ ${self.unit_price} ({self.discount_pct}% off)"
 
     @property
     def line_total(self):
-        """Total after discount, before tax."""
-        return self.gross_total - self.discount_amount
+        base = self.qty * self.unit_price
+        discount = base * (self.discount_pct / 100)
+        return float(base - discount)
 
     @property
-    def tax_amount(self):
-        """Estimated tax for this line."""
-        return self.line_total * self.product.tax_rate / 100
-
-    @property
-    def line_total_with_tax(self):
-        """Total including tax."""
-        return self.line_total + self.tax_amount
+    def discount_amount(self):
+        return float(self.qty * self.unit_price * (self.discount_pct / 100))
 
 
 class ApprovalLog(models.Model):
-    """Full audit trail for every approval action on a quotation."""
+    """Audit trail for every approval action."""
 
     class Action(models.TextChoices):
-        SUBMITTED = 'submitted', 'Submitted'
+        SUBMITTED = 'submitted', 'Submitted for Approval'
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected'
         RETURNED = 'returned', 'Returned for Revision'
-        RESUBMITTED = 'resubmitted', 'Resubmitted'
+        RE_SUBMITTED = 're_submitted', 'Re-submitted'
 
-    quotation = models.ForeignKey(
-        Quotation,
-        on_delete=models.CASCADE,
-        related_name='approval_logs',
-    )
+    quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='approval_logs')
+    step_order = models.PositiveIntegerField(default=1)
+    role_required = models.CharField(max_length=20, default='sales_manager')
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
         related_name='approval_actions',
     )
     action = models.CharField(max_length=20, choices=Action.choices)
-    role_at_action = models.CharField(max_length=20, blank=True)
-    reason = models.TextField(blank=True)
-    blended_risk_score_at_action = models.DecimalField(
-        max_digits=8, decimal_places=4, default=0,
-    )
-    timestamp = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'quotations_approval_log'
-        ordering = ['timestamp']
+        ordering = ['created_at']
 
     def __str__(self):
-        return f"{self.actor} — {self.get_action_display()} — Q-{self.quotation_id}"
+        actor_name = self.actor.get_full_name() if self.actor else 'System'
+        return f"{self.quotation.quote_number} — {self.get_action_display()} by {actor_name}"

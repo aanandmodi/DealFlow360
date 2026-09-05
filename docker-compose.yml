@@ -1,23 +1,18 @@
-version: "3.9"
+version: '3.9'
 
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:15
     container_name: dealflow360_db
     restart: unless-stopped
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "5432:5432"
     environment:
-      POSTGRES_DB: ${DB_NAME:-dealflow360}
-      POSTGRES_USER: ${DB_USER:-dealflow360}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-dealflow360_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-dealflow360}
+      POSTGRES_USER: ${POSTGRES_USER:-dealflow360}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dealflow360pass}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-dealflow360}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
 volumes:
   pgdata:

@@ -1,1 +1,1 @@
-# Billing app — Subscriptions, Proration, Upsell (Person B)
+# Billing app
