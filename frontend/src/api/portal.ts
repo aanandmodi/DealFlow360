@@ -2,6 +2,7 @@
  * Portal API — magic link, quotation view, negotiation.
  */
 import { ApiClient } from './client';
+const portalToken = () => decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
 
 export interface PortalQuotation {
   id: number;
@@ -74,16 +75,16 @@ export const portalApi = {
     ApiClient.get<PortalQuotation>(`/portal/quotations/${token}/`),
 
   comment: (id: number, message: string, line_id?: number) =>
-    ApiClient.post(`/portal/quotations/${id}/comment/`, { message, line_id }),
+    ApiClient.post(`/portal/quotations/${id}/comment/`, { message, line_id, portal_token: portalToken() }),
 
   counterDiscount: (id: number, counter_discount_percent: number, message?: string) =>
     ApiClient.post<{ status: string; message: string; new_status: string; blended_risk_score?: number }>(
       `/portal/quotations/${id}/counter-discount/`,
-      { counter_discount_percent, message }
+      { counter_discount_percent, message, portal_token: portalToken() }
     ),
 
   confirm: (id: number) =>
     ApiClient.post<{ status: string; message: string }>(
-      `/portal/quotations/${id}/confirm/`
+      `/portal/quotations/${id}/confirm/`, { portal_token: portalToken() }
     ),
 };

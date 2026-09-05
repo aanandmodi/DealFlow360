@@ -96,25 +96,16 @@ def compute_risk_score(quotation: Quotation) -> RiskScoreResult:
     requires_finance = False
 
     if has_any_breach or blended_risk_score > Decimal('0'):
-        rule = ApprovalChainRule.objects.filter(
-            min_over_pct__lte=blended_risk_score,
-            max_over_pct__gte=blended_risk_score,
-        ).first()
-
-        if rule:
-            if rule.requires_finance:
-                required_approval_level = Quotation.ApprovalLevel.MANAGER_FINANCE
-                requires_finance = True
-            elif rule.requires_manager:
-                required_approval_level = Quotation.ApprovalLevel.MANAGER
-            else:
-                required_approval_level = Quotation.ApprovalLevel.NONE
-        else:
-            if blended_risk_score >= Decimal('5') or any(d.overage >= Decimal('5') for d in line_details):
-                required_approval_level = Quotation.ApprovalLevel.MANAGER_FINANCE
-                requires_finance = True
-            else:
-                required_approval_level = Quotation.ApprovalLevel.MANAGER
+        # Evaluate both blended leakage and each line; a small expensive violation
+        # cannot hide a severe exception on a low-value service.
+        scores = [blended_risk_score] + [d.overage for d in line_details]
+        rules = list(ApprovalChainRule.objects.all())
+        requires_finance = any(
+            rule.requires_finance and any(rule.min_over_pct <= score <= rule.max_over_pct for score in scores)
+            for rule in rules
+        ) or (not rules and max(scores) >= Decimal('5'))
+        required_approval_level = (Quotation.ApprovalLevel.MANAGER_FINANCE if requires_finance
+                                   else Quotation.ApprovalLevel.MANAGER)
 
     return RiskScoreResult(
         blended_risk_score=blended_risk_score,
@@ -131,6 +122,8 @@ def submit_quotation(quotation: Quotation, actor) -> RiskScoreResult:
     """
     Submit quotation: compute risk score, update status, and log.
     """
+    if quotation.status not in ('draft', 'under_negotiation', 'sent', 'approved'):
+        raise ValueError('This quotation cannot be submitted in its current state.')
     result = compute_risk_score(quotation)
 
     quotation.blended_risk_score = result.blended_risk_score
@@ -164,6 +157,8 @@ def approve_quotation(quotation: Quotation, actor, reason: str = '') -> bool:
     if quotation.status != Quotation.Status.PENDING_APPROVAL:
         raise ValueError(f"Cannot approve quotation in status: {quotation.status}")
 
+    if actor.pk == quotation.rep_id:
+        raise ValueError('A quotation owner cannot approve their own exception.')
     user_role = getattr(actor, 'role', 'sales_rep')
 
     if user_role in ('sales_manager', 'admin') and not quotation.manager_approved:

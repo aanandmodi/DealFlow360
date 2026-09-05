@@ -28,10 +28,12 @@ class StockLevel(models.Model):
     product = models.ForeignKey('quotations.Product', on_delete=models.CASCADE, related_name='stock_levels')
     in_stock = models.PositiveIntegerField(default=0)
     reserved = models.PositiveIntegerField(default=0)
+    reorder_point = models.PositiveIntegerField(default=10)
 
     class Meta:
         db_table = 'fulfillment_stock_level'
         unique_together = ('warehouse', 'product')
+        constraints = [models.CheckConstraint(condition=models.Q(reserved__lte=models.F('in_stock')), name='stock_reserved_not_overdrawn')]
 
     def __str__(self):
         return f"{self.warehouse.name}: {self.product.name} — {self.available} available"
@@ -57,6 +59,7 @@ class FulfillmentSplit(models.Model):
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE)
     product = models.ForeignKey('quotations.Product', on_delete=models.CASCADE)
     qty = models.PositiveIntegerField()
+    is_backorder = models.BooleanField(default=False)
     shipment_count = models.PositiveIntegerField(default=1)
     estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.SUGGESTED)

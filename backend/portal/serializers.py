@@ -27,6 +27,19 @@ class NegotiationMessageSerializer(serializers.ModelSerializer):
         return None
 
 
+class CustomerLineSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    product_name = serializers.CharField(source='product.name')
+    product_category = serializers.CharField(source='product.category')
+    description = serializers.CharField()
+    qty = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = serializers.DecimalField(max_digits=12, decimal_places=2)
+    discount_pct = serializers.DecimalField(max_digits=5, decimal_places=2)
+    line_total = serializers.DecimalField(max_digits=14, decimal_places=2)
+    tax_amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    is_subscription = serializers.BooleanField()
+
+
 class PortalQuotationSerializer(serializers.Serializer):
     """Customer-facing quotation view with negotiation messages."""
     id = serializers.IntegerField()
@@ -38,12 +51,15 @@ class PortalQuotationSerializer(serializers.Serializer):
     customer_email = serializers.SerializerMethodField()
     rep_name = serializers.SerializerMethodField()
     rep_email = serializers.SerializerMethodField()
-    lines = QuotationLineSerializer(many=True)
+    lines = CustomerLineSerializer(many=True)
     negotiation_messages = NegotiationMessageSerializer(many=True)
     total_amount = serializers.SerializerMethodField()
     total_discount = serializers.SerializerMethodField()
     valid_until = serializers.DateField()
-    notes = serializers.CharField()
+    notes = serializers.SerializerMethodField()
+
+    def get_notes(self, obj):
+        return ''  # Internal sales notes never leave the workspace.
     created_at = serializers.DateTimeField()
 
     def get_status_display(self, obj):
@@ -81,7 +97,7 @@ class MagicLinkRequestSerializer(serializers.Serializer):
 
 
 class CounterDiscountSerializer(serializers.Serializer):
-    counter_discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2)
+    counter_discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100)
     message = serializers.CharField(required=False, default='')
     target_delivery_date = serializers.DateField(required=False)
 

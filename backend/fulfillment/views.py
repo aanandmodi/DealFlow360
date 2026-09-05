@@ -8,7 +8,8 @@ Endpoints:
 """
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from core.permissions import IsInternalUser as IsAuthenticated
+from core.access import quote_for, require_roles
 from rest_framework.response import Response
 
 from quotations.models import Quotation
@@ -31,7 +32,7 @@ def suggest_split_view(request, quotation_id):
     Does NOT persist — just a preview.
     """
     try:
-        quotation = Quotation.objects.get(pk=quotation_id)
+        quotation = quote_for(request, quotation_id, lock=True)
     except Quotation.DoesNotExist:
         return Response(
             {'error': f'Quotation {quotation_id} not found'},
@@ -45,13 +46,14 @@ def suggest_split_view(request, quotation_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def accept_split_view(request, quotation_id):
+    require_roles(request.user, 'finance', 'sales_manager', 'admin')
     """
     POST /api/fulfillment/{quotation_id}/accept-split/
 
     Accepts the last suggested split — persists to DB and reserves stock.
     """
     try:
-        quotation = Quotation.objects.get(pk=quotation_id)
+        quotation = quote_for(request, quotation_id, lock=True)
     except Quotation.DoesNotExist:
         return Response(
             {'error': f'Quotation {quotation_id} not found'},
@@ -74,6 +76,7 @@ def accept_split_view(request, quotation_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def override_split_view(request, quotation_id):
+    require_roles(request.user, 'finance', 'sales_manager', 'admin')
     """
     POST /api/fulfillment/{quotation_id}/override-split/
 
@@ -88,7 +91,7 @@ def override_split_view(request, quotation_id):
     }
     """
     try:
-        quotation = Quotation.objects.get(pk=quotation_id)
+        quotation = quote_for(request, quotation_id, lock=True)
     except Quotation.DoesNotExist:
         return Response(
             {'error': f'Quotation {quotation_id} not found'},

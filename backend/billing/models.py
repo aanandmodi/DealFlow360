@@ -68,9 +68,11 @@ class Payment(models.Model):
     method = models.CharField(max_length=50, default='bank_transfer')
     reference = models.CharField(max_length=100, blank=True)
     paid_at = models.DateTimeField(auto_now_add=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
 
     class Meta:
         db_table = 'billing_payment'
+        constraints = [models.UniqueConstraint(fields=['invoice', 'reference'], name='unique_payment_reference')]
 
     def __str__(self):
         return f"Payment ${self.amount} for {self.invoice.invoice_number}"
@@ -88,3 +90,23 @@ class UpsellRule(models.Model):
 
     def __str__(self):
         return f"{self.product.name} → {self.suggested_product.name}"
+
+
+class Subscription(models.Model):
+    line = models.OneToOneField('quotations.QuotationLine', on_delete=models.PROTECT, related_name='subscription')
+    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    start_date = models.DateField()
+    next_billing_date = models.DateField()
+    status = models.CharField(max_length=20, default='active')
+    prorated_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_note_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+
+class CreditNote(models.Model):
+    subscription = models.ForeignKey(Subscription, on_delete=models.PROTECT, related_name='credits')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)

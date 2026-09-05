@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     # Project apps
     'core',
@@ -36,6 +37,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.PrivateAPIHeaders',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -65,46 +67,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dealflow360.wsgi.application'
 
-# === Database (PostgreSQL with auto SQLite fallback) ===
-USE_SQLITE = os.getenv('USE_SQLITE', 'auto').lower()
-
-if USE_SQLITE in ('1', 'true', 'yes', 'sqlite'):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-else:
-    import socket
-    pg_host = os.getenv('DB_HOST', 'localhost')
-    pg_port = int(os.getenv('DB_PORT', '5432'))
-    pg_available = False
-    try:
-        sock = socket.create_connection((pg_host, pg_port), timeout=1)
-        sock.close()
-        pg_available = True
-    except OSError:
-        pg_available = False
-
-    if pg_available:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': os.getenv('DB_NAME', 'dealflow360'),
-                'USER': os.getenv('DB_USER', 'dealflow360'),
-                'PASSWORD': os.getenv('DB_PASSWORD', 'dealflow360_secret'),
-                'HOST': pg_host,
-                'PORT': str(pg_port),
-            }
-        }
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
+# Explicit database selection; production never silently changes databases.
+USE_SQLITE = os.getenv('USE_SQLITE', '1' if DEBUG else '0').lower() in ('1', 'true', 'yes')
+if USE_SQLITE and not DEBUG:
+    raise RuntimeError('Production requires PostgreSQL (USE_SQLITE=0).')
+DATABASES = {'default': ({
+    'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3',
+} if USE_SQLITE else {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': os.getenv('POSTGRES_DB', 'dealflow360'),
+    'USER': os.getenv('POSTGRES_USER', 'dealflow360'),
+    'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+    'HOST': os.getenv('POSTGRES_HOST', '127.0.0.1'),
+    'PORT': os.getenv('POSTGRES_PORT', '5432'),
+})}
+DATABASES['default']['ATOMIC_REQUESTS'] = True
 
 # Auth
 AUTH_USER_MODEL = 'core.User'
@@ -118,7 +95,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Kolkata'
 USE_I18N = True
 USE_TZ = True
 
@@ -139,6 +116,8 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.AnonRateThrottle', 'rest_framework.throttling.UserRateThrottle'],
+    'DEFAULT_THROTTLE_RATES': {'anon': '20/min', 'user': '300/min'},
 }
 
 # Simple JWT
@@ -166,3 +145,17 @@ PORTAL_MAGIC_LINK_EXPIRY_HOURS = int(os.getenv('PORTAL_MAGIC_LINK_EXPIRY_HOURS',
 # Dashboard config
 STALLED_DEAL_THRESHOLD_DAYS = 14
 DISCOUNT_ANOMALY_THRESHOLD_PCT = 5.0
+
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'no-referrer'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+X_FRAME_OPTIONS = 'DENY'
+if not DEBUG and (SECRET_KEY.startswith('django-insecure') or len(SECRET_KEY) < 50):
+    raise RuntimeError('Set a strong DJANGO_SECRET_KEY before production startup.')

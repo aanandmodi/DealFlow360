@@ -8,7 +8,10 @@ from decimal import Decimal
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from core.permissions import IsInternalUser as IsAuthenticated
+from core.access import quote_for, scoped_quotes, editable, require_roles
+from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from .models import (
@@ -33,7 +36,7 @@ def quotation_list(request):
     POST: Create a new quotation.
     """
     if request.method == 'GET':
-        qs = Quotation.objects.select_related('customer', 'rep').prefetch_related('lines__product').all()
+        qs = scoped_quotes(request.user)
         stat = request.query_params.get('status')
         if stat:
             qs = qs.filter(status=stat)
@@ -45,7 +48,7 @@ def quotation_list(request):
             qs = qs.filter(customer_id=customer_id)
 
         user = request.user
-        if user.is_authenticated and getattr(user, 'role', None) == 'sales_rep' and request.query_params.get('scope') != 'all':
+        if user.is_authenticated and getattr(user, 'role', None) == 'sales_rep':
             qs = qs.filter(rep=user)
 
         serializer = QuotationListSerializer(qs, many=True)
@@ -67,8 +70,7 @@ def quotation_list(request):
         except Customer.DoesNotExist:
             return Response({'error': 'Customer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        count = Quotation.objects.count() + 1001
-        quote_number = f"Q-{count}"
+        quote_number = f"Q-{uuid.uuid4().hex[:12].upper()}"
 
         q = Quotation.objects.create(
             quote_number=quote_number,
@@ -90,10 +92,9 @@ def quotation_detail(request, pk):
     PATCH: Update quotation header fields.
     DELETE: Delete quotation (draft only).
     """
-    q = get_object_or_404(
-        Quotation.objects.select_related('customer', 'rep').prefetch_related('lines__product', 'approval_logs__actor'),
-        pk=pk,
-    )
+    q = quote_for(request, pk, lock=request.method != 'GET')
+    if request.method != 'GET':
+        editable(q)
 
     if request.method == 'GET':
         return Response(QuotationSerializer(q).data)
@@ -134,21 +135,24 @@ def quotation_lines(request, pk):
     GET: List line items on a quotation.
     POST: Add a new line item to a quotation.
     """
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
 
     if request.method == 'GET':
         return Response(QuotationLineSerializer(q.lines.all(), many=True).data)
 
     elif request.method == 'POST':
+        editable(q)
         data = request.data
         prod_id = data.get('product') or data.get('product_id')
         if not prod_id:
             return Response({'error': 'Product ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         product = get_object_or_404(Product, pk=prod_id)
-        qty = Decimal(str(data.get('quantity') or data.get('qty') or 1))
-        unit_price = Decimal(str(data.get('unit_price') or product.base_price))
-        discount_pct = Decimal(str(data.get('discount_percent') or data.get('discount_pct') or 0))
+        qty, discount_pct = validated_line(data, product)
+        from .models import PriceListItem
+        price = PriceListItem.objects.filter(product=product, price_list__tier=q.customer.tier,
+                    price_list__currency='INR', price_list__is_active=True).first()
+        unit_price = price.price if price else product.base_price
 
         line = QuotationLine.objects.create(
             quotation=q,
@@ -158,6 +162,7 @@ def quotation_lines(request, pk):
             discount_pct=discount_pct,
             is_subscription=product.is_subscription,
         )
+        audit_edit(q, request.user)
         return Response(QuotationLineSerializer(line).data, status=status.HTTP_201_CREATED)
 
 
@@ -168,22 +173,21 @@ def quotation_line_detail(request, pk, line_id):
     PATCH: Update line item quantity or discount.
     DELETE: Remove line item from quotation.
     """
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
+    editable(q)
     line = get_object_or_404(QuotationLine, pk=line_id, quotation=q)
 
     if request.method == 'PATCH':
         data = request.data
-        if 'quantity' in data or 'qty' in data:
-            line.qty = Decimal(str(data.get('quantity') or data.get('qty')))
-        if 'discount_percent' in data or 'discount_pct' in data:
-            line.discount_pct = Decimal(str(data.get('discount_percent') or data.get('discount_pct')))
-        if 'unit_price' in data:
-            line.unit_price = Decimal(str(data['unit_price']))
+        qty, discount = validated_line(data, line.product, line)
+        line.qty, line.discount_pct = qty, discount
         line.save()
+        audit_edit(q, request.user)
         return Response(QuotationLineSerializer(line).data)
 
     elif request.method == 'DELETE':
         line.delete()
+        audit_edit(q, request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -193,10 +197,11 @@ def quotation_submit(request, pk):
     """
     Submit quotation: runs blended discount risk score algorithm, sets required approval level.
     """
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
     if not q.lines.exists():
         return Response({'error': 'Cannot submit a quotation with no line items.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    editable(q)
     result = submit_quotation(q, request.user)
 
     return Response({
@@ -225,8 +230,9 @@ def quotation_submit(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def quotation_approve(request, pk):
+    require_roles(request.user, 'sales_manager', 'finance', 'admin')
     """Advance approval chain."""
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
     reason = request.data.get('reason', '')
     try:
         fully_approved = approve_quotation(q, request.user, reason)
@@ -244,8 +250,9 @@ def quotation_approve(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def quotation_reject(request, pk):
+    require_roles(request.user, 'sales_manager', 'finance', 'admin')
     """Reject quotation."""
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
     reason = request.data.get('reason', '')
     try:
         reject_quotation(q, request.user, reason)
@@ -257,8 +264,9 @@ def quotation_reject(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def quotation_return(request, pk):
+    require_roles(request.user, 'sales_manager', 'finance', 'admin')
     """Return quotation to rep for revision."""
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
     reason = request.data.get('reason', '')
     try:
         return_quotation(q, request.user, reason)
@@ -271,11 +279,11 @@ def quotation_return(request, pk):
 @permission_classes([IsAuthenticated])
 def quotation_confirm(request, pk):
     """Confirm an approved quotation."""
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
     if q.status not in (Quotation.Status.APPROVED, Quotation.Status.CONFIRMED):
         return Response({'error': 'Only approved quotations can be confirmed.'}, status=status.HTTP_400_BAD_REQUEST)
-    q.status = Quotation.Status.CONFIRMED
-    q.save()
+    from billing.services.lifecycle import confirm_order
+    confirm_order(q, request.user)
     return Response({'status': q.status, 'message': 'Quotation confirmed.'})
 
 
@@ -283,7 +291,7 @@ def quotation_confirm(request, pk):
 @permission_classes([IsAuthenticated])
 def quotation_risk_score(request, pk):
     """Get diagnostic risk score breakdown for approval screen."""
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
     result = compute_risk_score(q)
     return Response({
         'quotation_id': q.pk,
@@ -313,7 +321,7 @@ def quotation_risk_score(request, pk):
 @permission_classes([IsAuthenticated])
 def quotation_logs(request, pk):
     """List approval audit logs for a quotation."""
-    q = get_object_or_404(Quotation, pk=pk)
+    q = quote_for(request, pk, lock=request.method != 'GET')
     logs = q.approval_logs.select_related('actor').all()
     return Response(ApprovalLogSerializer(logs, many=True).data)
 
@@ -358,7 +366,7 @@ def product_list(request):
 @permission_classes([IsAuthenticated])
 def pipeline_summary(request):
     """Pipeline summary for KPI cards."""
-    qs = Quotation.objects.all()
+    qs = scoped_quotes(request.user)
     total_count = qs.count()
 
     pipeline = {}
@@ -388,3 +396,20 @@ def pipeline_summary(request):
         'closed_won_count': closed_won_qs.count(),
         'pipeline_by_status': pipeline,
     })
+
+
+def validated_line(data, product, line=None):
+    quantity = data.get('quantity', data.get('qty', line.qty if line else 1))
+    discount = data.get('discount_percent', data.get('discount_pct', line.discount_pct if line else 0))
+    qty = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.01')).run_validation(quantity)
+    pct = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100).run_validation(discount)
+    if product.category == 'hardware' and qty != int(qty):
+        raise ValidationError('Hardware quantities must be whole units.')
+    if not product.is_active:
+        raise ValidationError('This product is inactive.')
+    return qty, pct
+
+
+def audit_edit(q, actor):
+    q.save(update_fields=['updated_at'])
+    ApprovalLog.objects.create(quotation=q, actor=actor, action='edited', note='Draft line updated.', role_required=actor.role)

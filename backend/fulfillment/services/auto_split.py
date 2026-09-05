@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db.models import F
+from django.db import transaction
+from rest_framework.exceptions import ValidationError
 
 from fulfillment.models import StockLevel, FulfillmentSplit, Warehouse
 
@@ -98,7 +100,7 @@ def suggest_split(quotation) -> SplitResult:
 
     # Gather all line items grouped by product
     # NOTE: repo uses 'qty' (DecimalField) not 'quantity'
-    lines = quotation.lines.select_related('product').all()
+    lines = quotation.lines.select_related('product').filter(product__category='hardware')
     product_quantities: dict[int, tuple] = {}  # product_id → (product, total_qty)
 
     for line in lines:
@@ -188,35 +190,39 @@ def suggest_split(quotation) -> SplitResult:
     return result
 
 
+@transaction.atomic
 def persist_split(quotation, suggestions: list[SplitSuggestion], status: str = 'accepted') -> list[FulfillmentSplit]:
     """
     Persist the suggested (or overridden) split allocations to the database.
     Reserves stock via F-expression for non-backorder items.
     """
-    # Clear any existing suggested splits for this quotation
-    FulfillmentSplit.objects.filter(quotation=quotation).delete()
-
+    if quotation.status not in ('confirmed', 'fulfillment', 'invoiced', 'paid'):
+        raise ValidationError('Customer confirmation is required before reserving stock.')
+    existing = list(FulfillmentSplit.objects.filter(quotation=quotation))
+    if existing:
+        return existing  # Idempotent acceptance; consolidation uses its own operation.
+    # Lock all participating inventory rows in stable order, then revalidate totals.
+    list(StockLevel.objects.select_for_update().filter(
+        product_id__in=[s.product_id for s in suggestions]).order_by('pk'))
+    allocations = [dict(product_id=s.product_id, warehouse_id=s.warehouse_id,
+                        quantity=s.quantity, is_backorder=s.is_backorder) for s in suggestions]
+    valid, errors = validate_manual_split(quotation, allocations)
+    if not valid:
+        raise ValidationError(errors)
     created_splits = []
     for s in suggestions:
-        split = FulfillmentSplit.objects.create(
-            quotation=quotation,
-            product_id=s.product_id,
-            warehouse_id=s.warehouse_id,
-            qty=s.quantity,
-            estimated_cost=Decimal(str(s.estimated_cost)),
-            status=status,
-        )
-        created_splits.append(split)
-
-        # Reserve stock for non-backorder items
         if not s.is_backorder:
-            StockLevel.objects.filter(
-                warehouse_id=s.warehouse_id,
-                product_id=s.product_id,
-            ).update(
-                reserved=F('reserved') + s.quantity
-            )
-
+            updated = StockLevel.objects.filter(warehouse_id=s.warehouse_id, product_id=s.product_id,
+                in_stock__gte=F('reserved') + s.quantity).update(reserved=F('reserved') + s.quantity)
+            if not updated:
+                raise ValidationError('Inventory changed. Refresh the allocation.')
+        created_splits.append(FulfillmentSplit.objects.create(quotation=quotation,
+            product_id=s.product_id, warehouse_id=s.warehouse_id, qty=s.quantity,
+            estimated_cost=Decimal(str(s.estimated_cost)) if not s.is_backorder else 0,
+            is_backorder=s.is_backorder, status=status))
+    if quotation.status == 'confirmed':
+        quotation.status = 'fulfillment'
+        quotation.save()
     return created_splits
 
 
@@ -234,7 +240,7 @@ def validate_manual_split(quotation, manual_allocations: list[dict]) -> tuple[bo
     errors = []
 
     # Check total quantities match quotation lines
-    lines = quotation.lines.all()
+    lines = quotation.lines.filter(product__category='hardware')
     required_qty: dict[int, int] = {}
     for line in lines:
         required_qty[line.product_id] = required_qty.get(line.product_id, 0) + int(line.qty)
@@ -251,6 +257,21 @@ def validate_manual_split(quotation, manual_allocations: list[dict]) -> tuple[bo
                 f"Product {pid}: need {needed} units but allocated {allocated}"
             )
 
+    if set(allocated_qty) - set(required_qty):
+        errors.append('Allocation contains a product outside the hardware order.')
+    totals = {}
+    for alloc in manual_allocations:
+        if alloc['quantity'] <= 0:
+            errors.append('Quantities must be positive.')
+        if not Warehouse.objects.filter(pk=alloc['warehouse_id'], is_active=True).exists():
+            errors.append('Warehouse is inactive or missing.')
+        if not alloc.get('is_backorder', False):
+            key = (alloc['product_id'], alloc['warehouse_id'])
+            totals[key] = totals.get(key, 0) + alloc['quantity']
+    for (pid, wid), qty in totals.items():
+        stock = StockLevel.objects.filter(product_id=pid, warehouse_id=wid).first()
+        if not stock or stock.available < qty:
+            errors.append('Combined allocations exceed available inventory.')
     # Check stock availability for non-backorder items
     for alloc in manual_allocations:
         if alloc.get('is_backorder', False):
@@ -282,7 +303,7 @@ def _check_backorder_consolidation(quotation) -> bool:
     """
     backorders = FulfillmentSplit.objects.filter(
         quotation=quotation,
-        status__in=['suggested', 'accepted'],
+        is_backorder=True,
     ).select_related('product')
 
     for bo in backorders:

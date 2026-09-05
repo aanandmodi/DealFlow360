@@ -14,11 +14,22 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True, min_length=10)
 
     class Meta:
         model = User
         fields = ['username', 'email', 'password', 'first_name', 'last_name', 'role']
+
+    def validate(self, data):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        if data.get('role', 'sales_rep') != 'sales_rep':
+            raise serializers.ValidationError({'role': 'Self-registration creates sales representatives only.'})
+        try:
+            validate_password(data['password'], User(username=data['username'], email=data.get('email', '')))
+        except ValidationError as exc:
+            raise serializers.ValidationError({'password': exc.messages})
+        return data
 
     def create(self, validated_data):
         user = User.objects.create_user(
@@ -27,7 +38,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
-            role=validated_data.get('role', User.Role.SALES_REP),
+            role=User.Role.SALES_REP,
         )
         return user
 

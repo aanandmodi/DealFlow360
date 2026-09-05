@@ -81,11 +81,12 @@ def get_upsell_suggestions(quotation) -> list[UpsellSuggestionResult]:
             continue
 
         # Calculate margin delta (simplified: suggested price - threshold)
-        margin_delta = suggested.base_price * Decimal('0.35')  # ~35% margin assumed
+        margin_delta = suggested.base_price - suggested.cost_price
+        margin_pct = margin_delta / suggested.base_price * 100 if suggested.base_price else 0
 
         # Filter by minimum margin threshold
         # NOTE: repo uses 'min_margin_pct' not 'min_margin_threshold'
-        if margin_delta < rule.min_margin_pct:
+        if not suggested.is_active or margin_pct < rule.min_margin_pct:
             continue
 
         already_suggested.add(suggested.id)

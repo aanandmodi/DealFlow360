@@ -1,213 +1,76 @@
-"""
-DRF views for the Billing app — Person B.
-
-Endpoints:
-  GET  /api/billing/{quotation_id}/schedule/
-  POST /api/billing/{line_id}/prorate/
-  POST /api/billing/{line_id}/cancel/
-  GET  /api/quotations/{id}/upsell-suggestions/  (shared contract)
-"""
-from datetime import date
-
-from rest_framework import status
+from decimal import Decimal
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-
-from quotations.models import Quotation
-from .models import SubscriptionPlan
-from .serializers import (
-    UpsellSuggestionResponseSerializer,
-    ProrateRequestSerializer,
-    ProrationResponseSerializer,
-)
-from .services.proration import (
-    get_billing_schedule,
-    prorate_subscription_change,
-    cancel_subscription,
-)
+from core.permissions import IsInternalUser
+from core.access import quote_for, scoped_quotes, require_roles
+from .models import Subscription, SubscriptionPlan, Invoice
+from .services.proration import get_billing_schedule, prorate_subscription_change, cancel_subscription
 from .services.upsell import get_upsell_suggestions
+from .services.lifecycle import invoice_data, record_payment
+from .serializers import ProrateRequestSerializer
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsInternalUser])
 def billing_schedule_view(request, quotation_id):
-    """
-    GET /api/billing/{quotation_id}/schedule/
+    return Response(get_billing_schedule(quote_for(request, quotation_id)))
 
-    Returns the billing schedule for a quotation, separating one-time
-    and recurring lines.
-    """
-    try:
-        quotation = Quotation.objects.get(pk=quotation_id)
-    except Quotation.DoesNotExist:
-        return Response(
-            {'error': f'Quotation {quotation_id} not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
 
-    schedule = get_billing_schedule(quotation)
-    return Response(schedule, status=status.HTTP_200_OK)
+def subscription_for(request, line_id):
+    require_roles(request.user, 'finance', 'admin')
+    sub = get_object_or_404(Subscription.objects.select_related('line__quotation', 'plan'), line_id=line_id)
+    quote_for(request, sub.line.quotation_id, lock=True)
+    return Subscription.objects.select_for_update().get(pk=sub.pk)
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsInternalUser])
 def prorate_view(request, line_id):
-    """
-    POST /api/billing/{line_id}/prorate/
-
-    Triggers proration calculation for a subscription line change.
-    """
-    # For the MVP, we look up by quotation line ID and find/create a subscription
-    from billing.models import SubscriptionPlan
-    from quotations.models import QuotationLine
-
-    try:
-        q_line = QuotationLine.objects.select_related('product').get(pk=line_id)
-    except QuotationLine.DoesNotExist:
-        return Response(
-            {'error': f'Quotation line {line_id} not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
+    sub = subscription_for(request, line_id)
     serializer = ProrateRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
-
-    # Find a subscription plan for this product
-    plan = SubscriptionPlan.objects.filter(
-        product=q_line.product, is_active=True
-    ).first()
-
-    if not plan:
-        return Response(
-            {'error': 'No active subscription plan for this product'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Create a mock subscription line for proration calc
-    from dataclasses import dataclass
-    from decimal import Decimal
-
-    @dataclass
-    class MockSubLine:
-        plan: object
-        start_date: date
-        next_billing_date: date
-        prorated_amount: Decimal = Decimal("0.00")
-        credit_note_amount: Decimal = Decimal("0.00")
-        status: str = 'active'
-        cancelled_at: object = None
-
-        def save(self):
-            pass  # MVP: no actual persistence yet
-
-    sub_line = MockSubLine(
-        plan=plan,
-        start_date=data['change_date'] - __import__('datetime').timedelta(days=15),
-        next_billing_date=data['change_date'] + __import__('datetime').timedelta(days=15),
-    )
-
-    new_plan = None
-    if 'new_plan_id' in data:
-        try:
-            new_plan = SubscriptionPlan.objects.get(pk=data['new_plan_id'])
-        except SubscriptionPlan.DoesNotExist:
-            return Response(
-                {'error': f"Plan {data['new_plan_id']} not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-    result = prorate_subscription_change(
-        subscription_line=sub_line,
-        change_date=data['change_date'],
-        new_plan=new_plan,
-        new_quantity=data.get('new_quantity'),
-    )
-
-    return Response(result.to_dict(), status=status.HTTP_200_OK)
+    plan = get_object_or_404(SubscriptionPlan, pk=data['new_plan_id'], is_active=True) if data.get('new_plan_id') else None
+    result = prorate_subscription_change(sub, data['change_date'], plan, data.get('new_quantity'))
+    return Response(result.to_dict())
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsInternalUser])
 def cancel_subscription_view(request, line_id):
-    """
-    POST /api/billing/{line_id}/cancel/
-
-    Cancel a subscription and generate a credit note for unused days.
-    """
-    from quotations.models import QuotationLine
-
-    try:
-        q_line = QuotationLine.objects.select_related('product').get(pk=line_id)
-    except QuotationLine.DoesNotExist:
-        return Response(
-            {'error': f'Quotation line {line_id} not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-    plan = SubscriptionPlan.objects.filter(
-        product=q_line.product, is_active=True
-    ).first()
-
-    if not plan:
-        return Response(
-            {'error': 'No active subscription plan for this product'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    from dataclasses import dataclass
-    from decimal import Decimal
-
-    @dataclass
-    class MockSubLine:
-        plan: object
-        start_date: date
-        next_billing_date: date
-        prorated_amount: Decimal = Decimal("0.00")
-        credit_note_amount: Decimal = Decimal("0.00")
-        status: str = 'active'
-        cancelled_at: object = None
-
-        def save(self):
-            pass
-
-    cancel_date = date.today()
-    sub_line = MockSubLine(
-        plan=plan,
-        start_date=cancel_date - __import__('datetime').timedelta(days=15),
-        next_billing_date=cancel_date + __import__('datetime').timedelta(days=15),
-    )
-
-    result = cancel_subscription(sub_line, cancel_date)
-
-    return Response({
-        'message': 'Subscription cancelled.',
-        'credit_note_amount': str(result.credit_amount),
-        'proration': result.to_dict(),
-    }, status=status.HTTP_200_OK)
+    sub = subscription_for(request, line_id)
+    result = cancel_subscription(sub, timezone.localdate())
+    return Response({'message': 'Subscription cancelled.', 'credit_note_amount': str(result.credit_amount), 'proration': result.to_dict()})
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsInternalUser])
 def upsell_suggestions_view(request, quotation_id):
-    """
-    GET /api/quotations/{quotation_id}/upsell-suggestions/
+    return Response({'suggestions': [s.to_dict() for s in get_upsell_suggestions(quote_for(request, quotation_id))]})
 
-    SHARED CONTRACT — Person A's Quotation Builder calls this endpoint.
-    Do NOT change the response shape without coordinating with Person A.
-    """
-    try:
-        quotation = Quotation.objects.get(pk=quotation_id)
-    except Quotation.DoesNotExist:
-        return Response(
-            {'error': f'Quotation {quotation_id} not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
 
-    suggestions = get_upsell_suggestions(quotation)
-    serialized = [s.to_dict() for s in suggestions]
+@api_view(['GET'])
+@permission_classes([IsInternalUser])
+def invoice_list(request):
+    invoices = Invoice.objects.filter(quotation__in=scoped_quotes(request.user)).select_related('quotation__customer')
+    return Response([invoice_data(i) for i in invoices])
 
-    return Response({
-        'suggestions': serialized,
-    }, status=status.HTTP_200_OK)
+
+class PaymentInput(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
+    method = serializers.ChoiceField(choices=['bank_transfer', 'upi', 'card', 'cash'])
+    reference = serializers.CharField(max_length=100, min_length=3)
+
+
+@api_view(['POST'])
+@permission_classes([IsInternalUser])
+def invoice_payment(request, pk):
+    require_roles(request.user, 'finance', 'admin')
+    invoice = get_object_or_404(Invoice, pk=pk, quotation__in=scoped_quotes(request.user))
+    quote_for(request, invoice.quotation_id, lock=True)
+    serializer = PaymentInput(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    return Response(record_payment(invoice, serializer.validated_data, request.user))
