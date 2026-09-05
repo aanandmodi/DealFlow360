@@ -121,6 +121,8 @@ def submit_quotation(quotation: Quotation, actor) -> RiskScoreResult:
     """
     if quotation.status not in ('draft', 'under_negotiation', 'sent', 'approved'):
         raise ValueError('This quotation cannot be submitted in its current state.')
+    if not quotation.lines.exists():
+        raise ValueError('Cannot submit an empty quotation. Add at least one product line.')
     result = compute_risk_score(quotation)
 
     quotation.blended_risk_score = result.blended_risk_score

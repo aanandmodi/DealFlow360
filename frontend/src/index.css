@@ -39,9 +39,53 @@
   --color-slate-800: #1e293b;
   --color-slate-900: #0f172a;
 
+  /* Extended Palettes */
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
+
+  --color-indigo-50: #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+
+  --color-rose-50: #fff1f2;
+  --color-rose-100: #ffe4e6;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-rose-700: #be123c;
+
   /* Premium Box Shadows */
   --shadow-premium: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05), 0 0 0 1px rgb(0 0 0 / 0.05);
   --shadow-premium-hover: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07), 0 0 0 1px rgb(0 0 0 / 0.06);
+}
+
+/* ── Hero Gradient Banner Class ── */
+.hero-gradient-banner {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #3730a3 100%) !important;
+  color: #ffffff !important;
 }
 
 /* ── Base Styles ── */
@@ -72,11 +116,30 @@ body {
 
 /* ── VendorBridge Premium Shadows & Cards ── */
 .shadow-premium {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05), 0 0 0 1px rgb(0 0 0 / 0.05);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(226, 232, 240, 0.85);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.shadow-premium:hover,
 .shadow-premium-hover {
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07), 0 0 0 1px rgb(0 0 0 / 0.06);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(203, 213, 225, 0.9);
+  transform: translateY(-1px);
+}
+
+/* ── Smooth Fade-in ── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* ── Semantic Colors Helper Classes ── */
@@ -105,7 +168,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -120,15 +183,16 @@ body {
 /* ── Legacy Component Compatibility Wrappers ── */
 .card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 0.75rem;
   padding: 1.25rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05), 0 0 0 1px rgb(0 0 0 / 0.05);
-  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .card:hover {
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07), 0 0 0 1px rgb(0 0 0 / 0.06);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
 }
 
 .btn {
@@ -142,10 +206,18 @@ body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   border: 1px solid transparent;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
 }
 
 .btn:focus-visible {
@@ -157,22 +229,33 @@ body {
   background: #2563EB;
   color: #FFFFFF;
   border-color: #1D4ED8;
+  box-shadow: 0 1px 2px 0 rgba(37, 99, 235, 0.2);
 }
-.btn-primary:hover { background: #1D4ED8; }
+.btn-primary:hover {
+  background: #1D4ED8;
+  box-shadow: 0 4px 12px 0 rgba(37, 99, 235, 0.3);
+}
 
 .btn-secondary {
   background: #FFFFFF;
   color: #0F172A;
   border-color: #E2E8F0;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
 }
-.btn-secondary:hover { background: #F8FAFC; }
+.btn-secondary:hover {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+}
 
 .btn-danger {
   background: #FFFFFF;
   color: #DC2626;
   border-color: #FECDD3;
 }
-.btn-danger:hover { background: #FFF1F2; }
+.btn-danger:hover {
+  background: #FFF1F2;
+  border-color: #FDA4AF;
+}
 
 .btn-ghost {
   background: transparent;
@@ -216,4 +299,327 @@ body {
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* ── Contextual Sidebar SVG Micro-Animations (Premium Fluid Physics) ── */
+.nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.nav-icon-svg {
+  display: block;
+  transform-origin: center center;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.nav-tab-link:hover .nav-icon-svg:not(.animating) {
+  transform: scale(1.12);
+}
+
+/* 1. Fulfillment: Truck Burnout Launch & Smooth Cruise */
+.anim-truck-burnout {
+  animation: anim-truck-burnout 1.05s cubic-bezier(0.25, 1, 0.35, 1) forwards;
+}
+
+@keyframes anim-truck-burnout {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg) scale(1);
+  }
+  16% {
+    /* Suspension squats back into burnout stance */
+    transform: translateX(-4px) translateY(1px) rotate(-7deg) scale(1.08);
+  }
+  30% {
+    /* Subtle burnout tire vibration */
+    transform: translateX(-5px) translateY(1px) rotate(-8deg) scale(1.09);
+  }
+  42% {
+    /* Burnout release launch */
+    transform: translateX(-2px) translateY(0) rotate(-4deg) scale(1.06);
+  }
+  68% {
+    /* Accelerating smoothly forward across tab */
+    transform: translateX(14px) translateY(-1px) rotate(3deg) scale(1.03);
+  }
+  86% {
+    /* Smooth deceleration and suspension rebound */
+    transform: translateX(2px) translateY(0.5px) rotate(-1deg) scale(1.01);
+  }
+  100% {
+    /* Settle back at rest */
+    transform: translateX(0) translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+/* Soft tire smoke puff */
+.nav-icon-wrap.has-truck-smoke::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  bottom: 2px;
+  width: 7px;
+  height: 7px;
+  background: radial-gradient(circle, rgba(148, 163, 184, 0.7) 0%, rgba(203, 213, 225, 0.3) 50%, transparent 80%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: anim-truck-smoke 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes anim-truck-smoke {
+  0% {
+    transform: scale(0.6) translate(0, 0);
+    opacity: 0.8;
+  }
+  40% {
+    transform: scale(2.2) translate(-6px, -2px);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(3.2) translate(-12px, -4px);
+    opacity: 0;
+  }
+}
+
+/* 2. Overview: 3D Perspective Card/Grid Flip */
+.anim-overview-flip {
+  animation: anim-overview-flip 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes anim-overview-flip {
+  0% {
+    transform: perspective(400px) rotateY(0deg) scale(1);
+  }
+  40% {
+    transform: perspective(400px) rotateY(180deg) scale(1.18);
+  }
+  75% {
+    transform: perspective(400px) rotateY(360deg) scale(1.04);
+  }
+  90% {
+    transform: perspective(400px) rotateY(360deg) scale(0.98);
+  }
+  100% {
+    transform: perspective(400px) rotateY(360deg) scale(1);
+  }
+}
+
+/* 3. Quotations: Elegant Page Lift & Stamp */
+.anim-quotation-flip {
+  animation: anim-quotation-flip 0.9s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+}
+
+@keyframes anim-quotation-flip {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  28% {
+    transform: translateY(-5px) rotate(-6deg) scale(1.14);
+  }
+  58% {
+    transform: translateY(2px) rotate(2deg) scale(0.98);
+  }
+  78% {
+    transform: translateY(-1px) rotate(-1deg) scale(1.02);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+/* 4. Approval Desk: Heroic Shield Bloom & Soft Gleam */
+.anim-shield-defend {
+  animation: anim-shield-defend 0.95s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes anim-shield-defend {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(37, 99, 235, 0));
+  }
+  30% {
+    transform: scale(1.26) rotate(-5deg);
+    filter: drop-shadow(0 2px 8px rgba(34, 197, 94, 0.55));
+  }
+  65% {
+    transform: scale(1.08) rotate(3deg);
+    filter: drop-shadow(0 1px 5px rgba(37, 99, 235, 0.35));
+  }
+  85% {
+    transform: scale(1.02) rotate(-1deg);
+    filter: drop-shadow(0 0 2px rgba(37, 99, 235, 0.15));
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+/* 5. Inventory: Crate Buoyant Float & Elastic Settle */
+.anim-package-wobble {
+  animation: anim-package-wobble 0.95s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+
+@keyframes anim-package-wobble {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-6px) rotate(-8deg) scale(1.15);
+  }
+  50% {
+    transform: translateY(2px) rotate(6deg) scale(0.96);
+  }
+  75% {
+    transform: translateY(-2px) rotate(-3deg) scale(1.04);
+  }
+  90% {
+    transform: translateY(1px) rotate(1deg) scale(1.01);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+/* 6. Subscriptions: Gliding Card Swipe & Glow */
+.anim-card-swipe {
+  animation: anim-card-swipe 0.95s cubic-bezier(0.25, 1, 0.35, 1) forwards;
+}
+
+@keyframes anim-card-swipe {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  35% {
+    transform: translateX(-4px) translateY(-3px) rotate(-8deg) scale(1.12);
+  }
+  65% {
+    transform: translateX(10px) translateY(1px) rotate(6deg) scale(1.1);
+    filter: drop-shadow(0 2px 8px rgba(59, 130, 246, 0.6));
+  }
+  85% {
+    transform: translateX(-1px) translateY(0) rotate(-1deg) scale(1.02);
+    filter: drop-shadow(0 1px 4px rgba(59, 130, 246, 0.3));
+  }
+  100% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+/* 7. Invoices & Payments: Fluid Receipt Print & Dispense */
+.anim-receipt-feed {
+  animation: anim-receipt-feed 0.9s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+}
+
+@keyframes anim-receipt-feed {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  25% {
+    transform: translateY(-4px) scaleY(1.14);
+  }
+  55% {
+    transform: translateY(5px) scaleY(1.16);
+  }
+  80% {
+    transform: translateY(-1px) scaleY(0.98);
+  }
+  92% {
+    transform: translateY(1px) scaleY(1.02);
+  }
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+/* 8. Deal Health: Organic Vital Cardiac Rhythm */
+.anim-heart-thump {
+  animation: anim-heart-thump 1.0s ease-in-out forwards;
+}
+
+@keyframes anim-heart-thump {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  22% {
+    transform: scale(1.26);
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+  }
+  38% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.2));
+  }
+  54% {
+    transform: scale(1.30);
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.7));
+  }
+  75% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.3));
+  }
+  90% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+/* 9. Reports: Metric Bar Elevation Surge */
+.anim-chart-surge {
+  animation: anim-chart-surge 0.9s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+}
+
+@keyframes anim-chart-surge {
+  0% {
+    transform: scaleY(1) translateY(0);
+  }
+  30% {
+    transform: scaleY(0.8) translateY(2px);
+  }
+  60% {
+    transform: scaleY(1.36) translateY(-4px);
+  }
+  82% {
+    transform: scaleY(0.96) translateY(1px);
+  }
+  92% {
+    transform: scaleY(1.04) translateY(-0.5px);
+  }
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+/* 10. Catalog & Rules: Mechanical Smooth Cog Rotation */
+.anim-gear-spin {
+  animation: anim-gear-spin 1.0s cubic-bezier(0.25, 1, 0.35, 1) forwards;
+}
+
+@keyframes anim-gear-spin {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.15);
+  }
+  85% {
+    transform: rotate(375deg) scale(1.04);
+  }
+  94% {
+    transform: rotate(358deg) scale(0.99);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
 }

@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/health/', health_view),
     path('api/config/<str:resource>/', configuration),
     path('api/config/<str:resource>/<int:pk>/', configuration),
+    path('api/reports/export/', reports),
     path('api/reports/', reports),
     path('api/quotations/<int:pk>/pdf/', quotation_pdf),
     path('api/quotations/<int:pk>/nudge/', nudge),

@@ -4,8 +4,12 @@ with full support for Person C's pipeline/dashboard queries and Person B's integ
 """
 
 import uuid
+import csv
+import io
+import itertools
 from decimal import Decimal
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from core.permissions import IsInternalUser as IsAuthenticated
@@ -78,8 +82,8 @@ def quotation_list(request):
             customer=customer,
             rep=request.user,
             status=Quotation.Status.DRAFT,
-            notes=serializers.CharField(max_length=10000,allow_blank=True).run_validation(data.get('notes','')),
-            payment_terms=serializers.ChoiceField(choices=['Net 30 Days','Net 60 Days','Due on Receipt']).run_validation(data.get('payment_terms','Net 30 Days')),
+            notes=serializers.CharField(max_length=10000, allow_blank=True).run_validation(data.get('notes', '')),
+            payment_terms=serializers.ChoiceField(choices=['Net 30 Days', 'Net 60 Days', 'Due on Receipt']).run_validation(data.get('payment_terms', 'Net 30 Days')),
             portal_token=str(uuid.uuid4()),
         )
         return Response(QuotationSerializer(q).data, status=status.HTTP_201_CREATED)
@@ -106,9 +110,9 @@ def quotation_detail(request, pk):
             data = dict(data)
             data['valid_until'] = serializers.DateField(allow_null=True).run_validation(data['valid_until'])
         if 'notes' in data:
-            q.notes = serializers.CharField(max_length=10000,allow_blank=True).run_validation(data['notes'])
+            q.notes = serializers.CharField(max_length=10000, allow_blank=True).run_validation(data['notes'])
         if 'payment_terms' in data:
-            q.payment_terms = serializers.ChoiceField(choices=['Net 30 Days','Net 60 Days','Due on Receipt']).run_validation(data['payment_terms'])
+            q.payment_terms = serializers.ChoiceField(choices=['Net 30 Days', 'Net 60 Days', 'Due on Receipt']).run_validation(data['payment_terms'])
         if 'valid_until' in data:
             q.valid_until = data['valid_until']
         if 'customer' in data or 'customer_id' in data:
@@ -165,7 +169,7 @@ def quotation_lines(request, pk):
                 plan = get_object_or_404(SubscriptionPlan, pk=serializers.IntegerField(min_value=1).run_validation(data['subscription_plan']), product=product, is_active=True)
                 unit_price = plan.price
             else:
-                plan = SubscriptionPlan.objects.filter(product=product,is_active=True,cycle='monthly').first()
+                plan = SubscriptionPlan.objects.filter(product=product, is_active=True, cycle='monthly').first()
                 if plan is None:
                     raise ValidationError('Select an active subscription plan for this product.')
         elif data.get('subscription_plan'):
@@ -308,6 +312,227 @@ def quotation_confirm(request, pk):
     return Response({'status': q.status, 'message': 'Quotation confirmed.'})
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def quotation_transition(request, pk):
+    """
+    Transition quotation stage directly from the Kanban board.
+    Enforces role-based permissions and state machine rules.
+    """
+    target = request.data.get('target_status')
+    if not target:
+        return Response({'error': 'Target status is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    q = quote_for(request, pk, lock=True)
+    curr = q.status
+    user_role = getattr(request.user, 'role', 'sales_rep')
+
+    try:
+        if target == curr:
+            return Response({'status': q.status, 'message': 'Already in this status.'})
+
+        # Locked / Terminal stages cannot transition except to cancelled
+        if curr in (Quotation.Status.CONFIRMED, Quotation.Status.FULFILLMENT, Quotation.Status.INVOICED, Quotation.Status.PAID):
+            if target != Quotation.Status.CANCELLED:
+                return Response({'error': f'Order {q.quote_number} is already confirmed and active. Cancel the quotation to revise.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if target == Quotation.Status.PENDING_APPROVAL:
+            if curr not in (Quotation.Status.DRAFT, Quotation.Status.UNDER_NEGOTIATION, Quotation.Status.SENT):
+                return Response({'error': f'Cannot submit quotation from {curr}.'}, status=status.HTTP_400_BAD_REQUEST)
+            res = submit_quotation(q, request.user)
+            return Response({'status': q.status, 'message': f'Quotation submitted for review (Risk score: {res.blended_risk_score}%).'})
+
+        elif target == Quotation.Status.APPROVED:
+            if user_role not in ('sales_manager', 'finance', 'admin'):
+                return Response({'error': 'Only Sales Managers, Finance Directors, or Admins can approve deals.'}, status=status.HTTP_403_FORBIDDEN)
+            if curr == Quotation.Status.DRAFT:
+                submit_quotation(q, request.user)
+            if q.status == Quotation.Status.PENDING_APPROVAL:
+                approve_quotation(q, request.user, 'Approved via Kanban board action.')
+            return Response({'status': q.status, 'message': 'Quotation approved.'})
+
+        elif target == Quotation.Status.SENT:
+            if curr not in (Quotation.Status.APPROVED, Quotation.Status.UNDER_NEGOTIATION):
+                return Response({'error': 'Quotation must be approved before sending to customer.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not q.portal_token:
+                from portal.models import PortalToken
+                pt = PortalToken.objects.create(email=q.customer.email, quotation=q)
+                q.portal_token = str(pt.token)
+            q.status = Quotation.Status.SENT
+            q.save(update_fields=['status', 'portal_token'])
+            ApprovalLog.objects.create(quotation=q, actor=request.user, action='sent', role_required='sales_rep', note='Dispatched to customer via Kanban board.')
+            return Response({'status': q.status, 'message': 'Quotation marked as Sent with active portal link.'})
+
+        elif target == Quotation.Status.UNDER_NEGOTIATION:
+            q.status = Quotation.Status.UNDER_NEGOTIATION
+            q.save(update_fields=['status'])
+            ApprovalLog.objects.create(quotation=q, actor=request.user, action='negotiation', role_required='sales_rep', note='Portal negotiation active.')
+            return Response({'status': q.status, 'message': 'Quotation marked as Under Negotiation.'})
+
+        elif target == Quotation.Status.CONFIRMED:
+            if curr not in (Quotation.Status.APPROVED, Quotation.Status.SENT, Quotation.Status.UNDER_NEGOTIATION):
+                return Response({'error': 'Only approved or sent quotes can be confirmed.'}, status=status.HTTP_400_BAD_REQUEST)
+            from billing.services.lifecycle import confirm_order
+            confirm_order(q, request.user)
+            return Response({'status': q.status, 'message': 'Quotation confirmed and converted to Order!'})
+
+        elif target == Quotation.Status.CANCELLED:
+            q.status = Quotation.Status.CANCELLED
+            q.save(update_fields=['status'])
+            ApprovalLog.objects.create(quotation=q, actor=request.user, action='cancelled', role_required=user_role, note='Cancelled via Kanban.')
+            return Response({'status': q.status, 'message': 'Quotation cancelled.'})
+
+        elif target == Quotation.Status.DRAFT:
+            if curr not in (Quotation.Status.REJECTED, Quotation.Status.PENDING_APPROVAL, Quotation.Status.SENT):
+                return Response({'error': f'Cannot reset quotation to draft from {curr}.'}, status=status.HTTP_400_BAD_REQUEST)
+            q.status = Quotation.Status.DRAFT
+            q.manager_approved = False
+            q.finance_approved = False
+            q.save(update_fields=['status', 'manager_approved', 'finance_approved'])
+            ApprovalLog.objects.create(quotation=q, actor=request.user, action='returned', role_required=user_role, note='Reset to draft for editing.')
+            return Response({'status': q.status, 'message': 'Quotation reset to Draft.'})
+
+        return Response({'error': f'Unsupported transition to {target}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    except (ValueError, ValidationError) as err:
+        return Response({'error': str(err)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def customer_import_csv(request):
+    """
+    Bulk import customers from CSV file or raw CSV text.
+    Expected columns: name, email, tier (bronze/silver/gold), phone, company
+    """
+    csv_file = request.FILES.get('file')
+    csv_text = request.data.get('csv_text')
+
+    if not csv_file and not csv_text:
+        return Response({'error': 'Please provide either a CSV file or csv_text string.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if csv_file:
+        try:
+            content = csv_file.read().decode('utf-8', errors='replace')
+        except Exception as e:
+            return Response({'error': f'Failed to decode file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        content = csv_text
+
+    reader = csv.DictReader(io.StringIO(content))
+    if not reader.fieldnames:
+        return Response({'error': 'CSV contains no valid headers.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    headers = [h.strip().lower() for h in reader.fieldnames if h]
+    if 'name' not in headers:
+        return Response({'error': "CSV must contain at least a 'name' column."}, status=status.HTTP_400_BAD_REQUEST)
+
+    created_count = 0
+    updated_count = 0
+    imported = []
+
+    with transaction.atomic():
+        for i, row in enumerate(reader, start=1):
+            row_normalized = {k.strip().lower(): v.strip() for k, v in row.items() if k}
+            name = row_normalized.get('name')
+            if not name:
+                continue
+            email = row_normalized.get('email', f"{name.lower().replace(' ', '')}@example.com")
+            tier_raw = row_normalized.get('tier', 'bronze').lower()
+            if tier_raw not in ('gold', 'silver', 'bronze'):
+                tier_raw = 'bronze'
+            phone = row_normalized.get('phone', '')
+            company = row_normalized.get('company', '')
+
+            cust, created = Customer.objects.update_or_create(
+                name=name,
+                defaults={
+                    'email': email,
+                    'tier': tier_raw,
+                    'phone': phone,
+                    'company': company,
+                }
+            )
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+            imported.append({'id': cust.id, 'name': cust.name, 'email': cust.email, 'tier': cust.tier, 'created': created})
+
+    return Response({
+        'success': True,
+        'created_count': created_count,
+        'updated_count': updated_count,
+        'total': created_count + updated_count,
+        'imported': imported[:20],
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def product_generate_variants_matrix(request, pk):
+    """
+    Cartesian Product Variant Matrix Generator.
+    Accepts:
+      attributes: [
+        { name: "Memory", values: ["16GB", "32GB"], price_additions: [0, 15000] },
+        { name: "Storage", values: ["512GB", "1TB"], price_additions: [0, 12000] }
+      ]
+    Generates all Cartesian combinations and bulk creates ProductVariant records.
+    """
+    user_role = getattr(request.user, 'role', '')
+    if user_role not in ('admin', 'sales_manager'):
+        return Response({'error': 'Only Admins and Sales Managers can generate product variants.'}, status=status.HTTP_403_FORBIDDEN)
+
+    product = get_object_or_404(Product, pk=pk)
+    attributes = request.data.get('attributes', [])
+    if not attributes or len(attributes) < 1:
+        return Response({'error': 'At least one attribute with values is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    attr_value_tuples = []
+    for a in attributes:
+        vals = a.get('values', [])
+        prices = a.get('price_additions', [])
+        tuples = []
+        for idx, val in enumerate(vals):
+            price_add = Decimal(str(prices[idx])) if idx < len(prices) else Decimal('0.00')
+            tuples.append((val, price_add))
+        attr_value_tuples.append(tuples)
+
+    combos = list(itertools.product(*attr_value_tuples))
+    created_variants = []
+
+    with transaction.atomic():
+        for combo in combos:
+            var_name_parts = [str(t[0]) for t in combo]
+            var_name = " / ".join(var_name_parts)
+            total_extra_price = sum((t[1] for t in combo), Decimal('0.00'))
+
+            variant, created = ProductVariant.objects.update_or_create(
+                product=product,
+                attribute="Configuration",
+                value=var_name,
+                defaults={
+                    'extra_price': total_extra_price,
+                }
+            )
+            created_variants.append({
+                'id': variant.id,
+                'attribute': variant.attribute,
+                'value': variant.value,
+                'extra_price': str(variant.extra_price),
+                'created': created,
+            })
+
+    return Response({
+        'success': True,
+        'product_id': product.id,
+        'product_name': product.name,
+        'combinations_generated': len(created_variants),
+        'variants': created_variants,
+    })
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def quotation_risk_score(request, pk):
@@ -382,11 +607,11 @@ def product_list(request):
         from .models import PriceListItem
         customer = get_object_or_404(Customer, pk=request.query_params['customer'])
         overrides = dict(PriceListItem.objects.filter(price_list__tier=customer.tier, price_list__is_active=True,
-                        price_list__currency='INR').values_list('product_id','price'))
+                        price_list__currency='INR').values_list('product_id', 'price'))
         for item in data:
             if item['id'] in overrides:
                 item['base_price'] = str(overrides[item['id']])
-    return Response({'count':products.count(),'results':data})
+    return Response({'count': products.count(), 'results': data})
 
 
 @api_view(['GET'])

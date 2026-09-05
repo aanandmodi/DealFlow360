@@ -36,9 +36,10 @@ def reports(request):
              'rep': q.rep.get_full_name() if q.rep else 'Unassigned', 'status': q.status,
              'amount': q.total_amount, 'discount': q.total_discount, 'margin': q.margin_pct,
              'created': q.created_at.date()} for q in quotes]
-    if request.query_params.get('export') in ('xlsx','pdf'):
-        return report_file(rows, request.query_params['export'])
-    if request.query_params.get('export') == 'csv':
+    export_fmt = request.query_params.get('export') or request.query_params.get('format')
+    if export_fmt in ('xlsx', 'pdf'):
+        return report_file(rows, export_fmt)
+    if export_fmt == 'csv':
         output = StringIO()
         writer = csv.writer(output)
         writer.writerow(['Quotation', 'Customer', 'Rep', 'Status', 'Net amount (INR)', 'Discount (INR)', 'Margin %', 'Created'])

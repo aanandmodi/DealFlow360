@@ -17,12 +17,15 @@ from .serializers import PortalQuotationSerializer, NegotiationMessageSerializer
 from .services.anomaly import get_stalled_deals, get_discount_anomalies, get_delivery_slippage, get_dashboard_summary
 
 
-def resolve_token(token, pk=None):
+def resolve_token(token, pk=None, allow_used=False):
     try:
         parsed = UUID(str(token))
     except (ValueError, TypeError, AttributeError):
         raise PermissionDenied('Invalid or expired customer link.')
-    pt = PortalToken.objects.filter(token=parsed, is_used=False, expires_at__gt=timezone.now()).first()
+    query = PortalToken.objects.filter(token=parsed, expires_at__gt=timezone.now())
+    if not allow_used:
+        query = query.filter(is_used=False)
+    pt = query.first()
     if not pt or not pt.quotation_id or (pk is not None and pt.quotation_id != pk):
         raise PermissionDenied('Invalid or expired customer link.')
     q = get_object_or_404(Quotation.objects.select_for_update(), pk=pt.quotation_id)
@@ -68,7 +71,7 @@ def portal_quotations_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def portal_quotation_view(request, token):
-    q = resolve_token(token)
+    q = resolve_token(token, allow_used=True)
     return Response(PortalQuotationSerializer(q).data)
 
 
@@ -114,8 +117,17 @@ def portal_counter_discount(request, pk):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def portal_confirm(request, pk):
+    raw_token = request.headers.get('X-Portal-Token') or request.data.get('portal_token')
     q = customer_quote(request, pk)
+    if q.status not in ('approved', 'sent'):
+        raise ValidationError(f'Quotation is in {q.status} status and cannot be confirmed.')
     confirm_order(q)
+    # Mark portal token as used to enforce single-use finalization
+    if raw_token:
+        try:
+            PortalToken.objects.filter(token=UUID(str(raw_token))).update(is_used=True)
+        except (ValueError, TypeError):
+            pass
     return Response({'status': q.status, 'message': 'Order confirmed. Invoices and subscriptions are ready.'})
 
 
