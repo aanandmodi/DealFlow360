@@ -1,62 +1,66 @@
-"""
-Quotations serializers — for API consumption.
-Person A will expand these.
-"""
+"""Quotations app serializers."""
+
 from rest_framework import serializers
 from .models import (
-    Customer, Product, ProductVariant, Quotation, QuotationLine,
-    ApprovalLog, DiscountTier, PriceList, PriceListItem,
+    DiscountTier, CategoryDiscountCeiling, ApprovalChain,
+    Quotation, QuotationLine, ApprovalLog,
 )
 
 
-class CustomerSerializer(serializers.ModelSerializer):
+class DiscountTierSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Customer
+        model = DiscountTier
         fields = '__all__'
 
 
-class ProductVariantSerializer(serializers.ModelSerializer):
+class CategoryDiscountCeilingSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    tier_name = serializers.CharField(source='discount_tier.name', read_only=True)
+
     class Meta:
-        model = ProductVariant
+        model = CategoryDiscountCeiling
         fields = '__all__'
 
 
-class ProductSerializer(serializers.ModelSerializer):
-    variants = ProductVariantSerializer(many=True, read_only=True)
-
+class ApprovalChainSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Product
+        model = ApprovalChain
         fields = '__all__'
 
 
 class QuotationLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
-    product_category = serializers.CharField(source='product.category', read_only=True, default='')
-    line_total = serializers.SerializerMethodField()
-    discount_amount = serializers.SerializerMethodField()
+    product_sku = serializers.CharField(source='product.sku', read_only=True)
+    category_name = serializers.CharField(source='product.category.name', read_only=True)
+    net_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    line_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    gross_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    discount_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    tax_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
         model = QuotationLine
-        fields = '__all__'
-
-    def get_line_total(self, obj):
-        return float(obj.line_total)
-
-    def get_discount_amount(self, obj):
-        return float(obj.discount_amount)
+        fields = [
+            'id', 'quotation', 'product', 'product_name', 'product_sku',
+            'category_name', 'quantity', 'unit_price', 'discount_percent',
+            'net_price', 'gross_total', 'discount_amount', 'line_total', 'tax_amount',
+        ]
+        read_only_fields = ['id']
 
 
 class ApprovalLogSerializer(serializers.ModelSerializer):
-    actor_name = serializers.SerializerMethodField()
+    actor_name = serializers.CharField(source='actor.get_full_name', read_only=True)
+    actor_username = serializers.CharField(source='actor.username', read_only=True)
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
 
     class Meta:
         model = ApprovalLog
-        fields = '__all__'
-
-    def get_actor_name(self, obj):
-        if obj.actor:
-            return obj.actor.get_full_name() or obj.actor.username
-        return 'System'
+        fields = [
+            'id', 'quotation', 'actor', 'actor_name', 'actor_username',
+            'action', 'action_display', 'role_at_action', 'reason',
+            'blended_risk_score_at_action', 'timestamp',
+        ]
+        read_only_fields = ['id', 'timestamp']
 
 
 class QuotationSerializer(serializers.ModelSerializer):
@@ -64,65 +68,75 @@ class QuotationSerializer(serializers.ModelSerializer):
     approval_logs = ApprovalLogSerializer(many=True, read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_tier = serializers.CharField(source='customer.tier', read_only=True)
-    rep_name = serializers.SerializerMethodField()
-    total_amount = serializers.SerializerMethodField()
-    total_discount = serializers.SerializerMethodField()
-    margin_pct = serializers.SerializerMethodField()
+    customer_tier_display = serializers.CharField(source='customer.get_tier_display', read_only=True)
+    sales_rep_name = serializers.CharField(source='sales_rep.get_full_name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    approval_level_display = serializers.CharField(source='get_required_approval_level_display', read_only=True)
+    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total_discount_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    tax_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    gross_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    blended_discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
+    blended_margin_percent = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
 
     class Meta:
         model = Quotation
-        fields = '__all__'
-
-    def get_rep_name(self, obj):
-        if obj.rep:
-            return obj.rep.get_full_name() or obj.rep.username
-        return 'Unassigned'
-
-    def get_total_amount(self, obj):
-        return float(obj.total_amount)
-
-    def get_total_discount(self, obj):
-        return float(obj.total_discount)
-
-    def get_margin_pct(self, obj):
-        return float(obj.margin_pct)
+        fields = [
+            'id', 'customer', 'customer_name', 'customer_tier', 'customer_tier_display',
+            'sales_rep', 'sales_rep_name', 'status', 'status_display',
+            'blended_risk_score', 'required_approval_level', 'approval_level_display',
+            'manager_approved', 'finance_approved',
+            'notes', 'payment_terms',
+            'subtotal', 'total_discount_amount', 'tax_amount', 'total',
+            'gross_total', 'blended_discount_percent', 'blended_margin_percent',
+            'created_at', 'updated_at',
+            'lines', 'approval_logs',
+        ]
+        read_only_fields = [
+            'id', 'status', 'blended_risk_score', 'required_approval_level',
+            'manager_approved', 'finance_approved', 'created_at', 'updated_at',
+        ]
 
 
 class QuotationListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for list/kanban views."""
+    """Lightweight serializer for list views (no nested lines/logs)."""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_tier = serializers.CharField(source='customer.tier', read_only=True)
     customer_company = serializers.CharField(source='customer.company', read_only=True)
-    rep_name = serializers.SerializerMethodField()
-    total_amount = serializers.SerializerMethodField()
-    margin_pct = serializers.SerializerMethodField()
+    sales_rep_name = serializers.CharField(source='sales_rep.get_full_name', read_only=True)
+    rep_name = serializers.CharField(source='sales_rep.get_full_name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total_amount = serializers.DecimalField(source='total', max_digits=12, decimal_places=2, read_only=True)
+    margin_pct = serializers.DecimalField(source='blended_margin_percent', max_digits=5, decimal_places=2, read_only=True)
+    quote_number = serializers.SerializerMethodField()
     line_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Quotation
         fields = [
-            'id', 'quote_number', 'customer_name', 'customer_tier',
-            'customer_company', 'rep_name', 'status', 'blended_risk_score',
-            'total_amount', 'margin_pct', 'line_count',
+            'id', 'customer', 'customer_name', 'customer_tier', 'customer_company',
+            'sales_rep', 'sales_rep_name', 'rep_name', 'status', 'status_display',
+            'blended_risk_score', 'required_approval_level',
+            'total', 'total_amount', 'margin_pct', 'quote_number', 'line_count',
             'created_at', 'updated_at',
         ]
-
-    def get_rep_name(self, obj):
-        if obj.rep:
-            return obj.rep.get_full_name() or obj.rep.username
-        return 'Unassigned'
-
-    def get_total_amount(self, obj):
-        return float(obj.total_amount)
-
-    def get_margin_pct(self, obj):
-        return float(obj.margin_pct)
 
     def get_line_count(self, obj):
         return obj.lines.count()
 
+    def get_quote_number(self, obj):
+        return f'Q-{obj.id}'
 
-class DiscountTierSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DiscountTier
-        fields = '__all__'
+
+class RiskScoreBreakdownSerializer(serializers.Serializer):
+    """Serializer for the risk score breakdown endpoint."""
+    line_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    category_name = serializers.CharField()
+    discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2)
+    ceiling = serializers.DecimalField(max_digits=5, decimal_places=2)
+    overage = serializers.DecimalField(max_digits=5, decimal_places=2)
+    line_value = serializers.DecimalField(max_digits=12, decimal_places=2)
+    policy_status = serializers.CharField()

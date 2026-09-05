@@ -1,64 +1,47 @@
-"""
-Core views — JWT login/refresh, registration, user info.
-"""
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
+"""Core views — Auth endpoints. Person C expands these."""
+
+from rest_framework import generics, permissions, viewsets
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import UserSerializer, RegisterSerializer, LoginSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .models import User, Product, ProductCategory, Customer
+from .serializers import (
+    UserSerializer, RegisterSerializer, CustomTokenObtainPairSerializer,
+    ProductSerializer, ProductCategorySerializer, CustomerSerializer,
+)
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def register_view(request):
-    """Register a new internal user."""
-    serializer = RegisterSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    user = serializer.save()
-    refresh = RefreshToken.for_user(user)
-    return Response({
-        'user': UserSerializer(user).data,
-        'tokens': {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-        }
-    }, status=status.HTTP_201_CREATED)
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    permission_classes = [permissions.AllowAny]
+    serializer_class = RegisterSerializer
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_view(request):
-    """Login with username/password, returns JWT tokens."""
-    serializer = LoginSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    user = serializer.validated_data['user']
-    refresh = RefreshToken.for_user(user)
-    return Response({
-        'user': UserSerializer(user).data,
-        'tokens': {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-        }
-    })
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def me_view(request):
-    """Return current user profile."""
-    return Response(UserSerializer(request.user).data)
+class MeView(generics.RetrieveAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def users_list_view(request):
-    """List all users (admin/manager only)."""
-    from .models import User
-    if request.user.role not in ('admin', 'sales_manager'):
-        return Response({'detail': 'Not authorized'}, status=403)
-    users = User.objects.all()
-    role = request.query_params.get('role')
-    if role:
-        users = users.filter(role=role)
-    return Response(UserSerializer(users, many=True).data)
+class ProductCategoryViewSet(viewsets.ModelViewSet):
+    queryset = ProductCategory.objects.all()
+    serializer_class = ProductCategorySerializer
+
+
+class ProductViewSet(viewsets.ModelViewSet):
+    queryset = Product.objects.filter(is_active=True)
+    serializer_class = ProductSerializer
+    filterset_fields = ['category', 'is_subscription']
+    search_fields = ['name', 'sku']
+
+
+class CustomerViewSet(viewsets.ModelViewSet):
+    queryset = Customer.objects.filter(is_active=True)
+    serializer_class = CustomerSerializer
+    filterset_fields = ['tier']
+    search_fields = ['name', 'company', 'email']

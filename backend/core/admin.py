@@ -1,17 +1,29 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User
+from .models import User, ProductCategory, Product, Customer
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
-    list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'is_active', 'date_joined']
-    list_filter = ['role', 'is_active', 'is_staff']
+class UserAdmin(admin.ModelAdmin):
+    list_display = ['username', 'email', 'role', 'is_active']
+    list_filter = ['role', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
-    ordering = ['username']
-    fieldsets = BaseUserAdmin.fieldsets + (
-        ('DealFlow360', {'fields': ('role', 'phone', 'avatar_url')}),
-    )
-    add_fieldsets = BaseUserAdmin.add_fieldsets + (
-        ('DealFlow360', {'fields': ('role', 'email', 'first_name', 'last_name')}),
-    )
+
+
+@admin.register(ProductCategory)
+class ProductCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description']
+    search_fields = ['name']
+
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ['name', 'sku', 'category', 'base_price', 'unit', 'tax_rate', 'is_subscription', 'is_active']
+    list_filter = ['category', 'is_subscription', 'is_active']
+    search_fields = ['name', 'sku']
+
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ['name', 'company', 'email', 'tier', 'is_active']
+    list_filter = ['tier', 'is_active']
+    search_fields = ['name', 'company', 'email']

@@ -25,7 +25,7 @@ class Warehouse(models.Model):
 class StockLevel(models.Model):
     """Per-product stock level at a warehouse."""
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stock_levels')
-    product = models.ForeignKey('quotations.Product', on_delete=models.CASCADE, related_name='stock_levels')
+    product = models.ForeignKey('core.Product', on_delete=models.CASCADE, related_name='stock_levels')
     in_stock = models.PositiveIntegerField(default=0)
     reserved = models.PositiveIntegerField(default=0)
 
@@ -55,7 +55,7 @@ class FulfillmentSplit(models.Model):
         'quotations.Quotation', on_delete=models.CASCADE, related_name='fulfillment_splits'
     )
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE)
-    product = models.ForeignKey('quotations.Product', on_delete=models.CASCADE)
+    product = models.ForeignKey('core.Product', on_delete=models.CASCADE)
     qty = models.PositiveIntegerField()
     shipment_count = models.PositiveIntegerField(default=1)
     estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -69,4 +69,4 @@ class FulfillmentSplit(models.Model):
         ordering = ['quotation', 'warehouse']
 
     def __str__(self):
-        return f"{self.quotation.quote_number} → {self.warehouse.name}: {self.qty}x {self.product.name}"
+        return f"Q-{self.quotation_id} → {self.warehouse.name}: {self.qty}x {self.product.name}"

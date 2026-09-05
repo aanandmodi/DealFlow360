@@ -13,7 +13,7 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
 class InvoiceAdmin(admin.ModelAdmin):
     list_display = ['invoice_number', 'quotation', 'type', 'amount', 'status', 'due_date', 'created_at']
     list_filter = ['type', 'status']
-    search_fields = ['invoice_number', 'quotation__quote_number']
+    search_fields = ['invoice_number', 'quotation__id']
 
 
 @admin.register(Payment)

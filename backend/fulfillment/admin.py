@@ -30,4 +30,4 @@ class StockLevelAdmin(admin.ModelAdmin):
 class FulfillmentSplitAdmin(admin.ModelAdmin):
     list_display = ['quotation', 'warehouse', 'product', 'qty', 'status', 'promised_ship_date']
     list_filter = ['status', 'warehouse']
-    search_fields = ['quotation__quote_number']
+    search_fields = ['quotation__id']

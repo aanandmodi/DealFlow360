@@ -116,7 +116,7 @@ def override_split_view(request, quotation_id):
 
     # Convert to SplitSuggestion objects and persist
     from fulfillment.models import Warehouse
-    from quotations.models import Product
+    from core.models import Product
 
     suggestions = []
     for alloc in allocations:

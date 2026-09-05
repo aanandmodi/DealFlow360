@@ -97,13 +97,13 @@ def get_billing_schedule(quotation) -> dict:
         line_data = {
             'line_id': line.id,
             'product_name': line.product.name,
-            'quantity': str(line.qty),
+            'quantity': str(line.quantity),
             'unit_price': str(line.unit_price),
-            'discount_percent': str(line.discount_pct),
+            'discount_percent': str(line.discount_percent),
             'line_total': str(round(line.line_total, 2)),
         }
 
-        if line.is_subscription:
+        if line.product.is_subscription:
             # Check if there's a subscription line attached
             sub_info = _get_subscription_info(line)
             line_data['subscription'] = sub_info

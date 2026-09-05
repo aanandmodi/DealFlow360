@@ -15,7 +15,7 @@ class SubscriptionPlan(models.Model):
         YEARLY = 'yearly', 'Yearly'
 
     name = models.CharField(max_length=200)
-    product = models.ForeignKey('quotations.Product', on_delete=models.CASCADE, related_name='subscription_plans')
+    product = models.ForeignKey('core.Product', on_delete=models.CASCADE, related_name='subscription_plans')
     cycle = models.CharField(max_length=15, choices=Cycle.choices, default=Cycle.MONTHLY)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     proration_rule = models.CharField(max_length=50, default='daily_proration')
@@ -78,8 +78,8 @@ class Payment(models.Model):
 
 class UpsellRule(models.Model):
     """Product pairing rules for upsell/cross-sell."""
-    product = models.ForeignKey('quotations.Product', on_delete=models.CASCADE, related_name='upsell_from')
-    suggested_product = models.ForeignKey('quotations.Product', on_delete=models.CASCADE, related_name='upsell_to')
+    product = models.ForeignKey('core.Product', on_delete=models.CASCADE, related_name='upsell_from')
+    suggested_product = models.ForeignKey('core.Product', on_delete=models.CASCADE, related_name='upsell_to')
     min_margin_pct = models.DecimalField(max_digits=5, decimal_places=2, default=20)
     is_promoted = models.BooleanField(default=False)
 

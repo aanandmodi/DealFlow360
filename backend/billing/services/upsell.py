@@ -93,7 +93,7 @@ def get_upsell_suggestions(quotation) -> list[UpsellSuggestionResult]:
             rule_id=rule.id,
             suggested_product_id=suggested.id,
             suggested_product_name=suggested.name,
-            suggested_product_category=suggested.get_category_display(),
+            suggested_product_category=suggested.category.name,
             suggested_product_price=suggested.base_price,
             margin_delta=margin_delta.quantize(Decimal('0.01')),
             is_promoted=rule.is_promoted,

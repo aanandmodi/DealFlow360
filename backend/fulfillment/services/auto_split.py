@@ -103,7 +103,7 @@ def suggest_split(quotation) -> SplitResult:
 
     for line in lines:
         pid = line.product_id
-        qty = int(line.qty)  # Convert from DecimalField
+        qty = int(line.quantity)
         if pid in product_quantities:
             existing_product, existing_qty = product_quantities[pid]
             product_quantities[pid] = (existing_product, existing_qty + qty)
@@ -237,7 +237,7 @@ def validate_manual_split(quotation, manual_allocations: list[dict]) -> tuple[bo
     lines = quotation.lines.all()
     required_qty: dict[int, int] = {}
     for line in lines:
-        required_qty[line.product_id] = required_qty.get(line.product_id, 0) + int(line.qty)
+        required_qty[line.product_id] = required_qty.get(line.product_id, 0) + int(line.quantity)
 
     allocated_qty: dict[int, int] = {}
     for alloc in manual_allocations:

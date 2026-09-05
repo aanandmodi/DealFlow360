@@ -1,175 +1,270 @@
-"""
-Quotation views — CRUD + pipeline.
-Person A will expand with approval state machine.
-"""
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+"""Quotations app views — all Person A API endpoints."""
+
+from rest_framework import viewsets, status, generics
+from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Quotation, QuotationLine, Customer, Product, DiscountTier
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from core.permissions import IsManagerOrAbove, IsAdmin
+
+from .models import (
+    DiscountTier, CategoryDiscountCeiling, ApprovalChain,
+    Quotation, QuotationLine, ApprovalLog,
+)
 from .serializers import (
-    QuotationSerializer, QuotationListSerializer,
-    CustomerSerializer, ProductSerializer, DiscountTierSerializer,
+    DiscountTierSerializer, CategoryDiscountCeilingSerializer,
+    ApprovalChainSerializer, QuotationSerializer, QuotationListSerializer,
+    QuotationLineSerializer, ApprovalLogSerializer,
+    RiskScoreBreakdownSerializer,
+)
+from .services.risk_score import (
+    compute_risk_score, submit_quotation,
+    approve_quotation, reject_quotation, return_quotation,
 )
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def quotation_list(request):
-    """List quotations — supports filtering by status, customer, rep."""
-    qs = Quotation.objects.select_related('customer', 'rep').prefetch_related('lines')
-    stat = request.query_params.get('status')
-    if stat:
-        qs = qs.filter(status=stat)
-    rep_id = request.query_params.get('rep')
-    if rep_id:
-        qs = qs.filter(rep_id=rep_id)
-    return Response(QuotationListSerializer(qs, many=True).data)
+class DiscountTierViewSet(viewsets.ModelViewSet):
+    """CRUD for discount tiers (Bronze/Silver/Gold config) - Manager/Admin restricted."""
+    queryset = DiscountTier.objects.all()
+    serializer_class = DiscountTierSerializer
+    permission_classes = [IsManagerOrAbove]
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def quotation_detail(request, pk):
-    """Full quotation detail with lines and approval logs."""
-    try:
-        q = Quotation.objects.select_related('customer', 'rep').prefetch_related(
-            'lines__product', 'approval_logs__actor'
-        ).get(pk=pk)
-    except Quotation.DoesNotExist:
-        return Response({'detail': 'Not found'}, status=404)
-    return Response(QuotationSerializer(q).data)
+class CategoryDiscountCeilingViewSet(viewsets.ModelViewSet):
+    """CRUD for per-category discount ceilings - Manager/Admin restricted."""
+    queryset = CategoryDiscountCeiling.objects.select_related('category', 'discount_tier').all()
+    serializer_class = CategoryDiscountCeilingSerializer
+    permission_classes = [IsManagerOrAbove]
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def quotation_create(request):
-    """Create a new quotation."""
-    import uuid
-    data = request.data
-    try:
-        customer = Customer.objects.get(id=data.get('customer_id'))
-    except Customer.DoesNotExist:
-        return Response({'detail': 'Customer not found'}, status=400)
-    q = Quotation.objects.create(
-        quote_number=f"Q-{Quotation.objects.count() + 1001}",
-        customer=customer,
-        rep=request.user,
-        status='draft',
-        notes=data.get('notes', ''),
-        portal_token=str(uuid.uuid4()),
-    )
-    return Response(QuotationSerializer(q).data, status=201)
+class ApprovalChainViewSet(viewsets.ModelViewSet):
+    """CRUD for approval chain configuration - Manager/Admin restricted."""
+    queryset = ApprovalChain.objects.all()
+    serializer_class = ApprovalChainSerializer
+    permission_classes = [IsManagerOrAbove]
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def quotation_submit(request, pk):
-    """Submit quotation for approval — triggers blended risk score calculation."""
-    try:
-        q = Quotation.objects.get(pk=pk)
-    except Quotation.DoesNotExist:
-        return Response({'detail': 'Not found'}, status=404)
+class QuotationViewSet(viewsets.ModelViewSet):
+    """
+    Main quotation CRUD + state machine endpoints.
 
-    # Calculate blended risk score
-    from decimal import Decimal
-    total_over = Decimal('0')
-    worst_line_over = Decimal('0')
-    total_value = Decimal('0')
+    List:   GET    /api/quotations/
+    Create: POST   /api/quotations/
+    Detail: GET    /api/quotations/{id}/
+    Update: PATCH  /api/quotations/{id}/
+    Delete: DELETE /api/quotations/{id}/
 
-    customer_tier = q.customer.tier
-    for line in q.lines.all():
+    Actions:
+    Submit:     POST /api/quotations/{id}/submit/
+    Approve:    POST /api/quotations/{id}/approve/
+    Reject:     POST /api/quotations/{id}/reject/
+    Return:     POST /api/quotations/{id}/return_for_revision/
+    Risk Score: GET  /api/quotations/{id}/risk_score/
+    """
+
+    def get_queryset(self):
+        qs = Quotation.objects.select_related(
+            'customer', 'sales_rep'
+        ).prefetch_related(
+            'lines__product__category', 'approval_logs__actor'
+        )
+        user = self.request.user
+        if user.is_authenticated and getattr(user, 'role', None) == 'sales_rep' and self.request.query_params.get('scope') != 'all':
+            qs = qs.filter(sales_rep=user)
+        return qs.all()
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return QuotationListSerializer
+        return QuotationSerializer
+
+    filterset_fields = ['status', 'customer', 'sales_rep', 'required_approval_level']
+    search_fields = ['customer__name', 'customer__company', 'notes']
+    ordering_fields = ['created_at', 'updated_at', 'blended_risk_score']
+
+    def perform_create(self, serializer):
+        serializer.save(sales_rep=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        """Submit quotation for approval. Computes risk score and routes."""
+        quotation = self.get_object()
+
+        if quotation.status not in [Quotation.Status.DRAFT, Quotation.Status.UNDER_NEGOTIATION]:
+            return Response(
+                {'error': f'Cannot submit quotation in status: {quotation.get_status_display()}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not quotation.lines.exists():
+            return Response(
+                {'error': 'Cannot submit a quotation with no line items.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = submit_quotation(quotation, request.user)
+
+        return Response({
+            'status': quotation.status,
+            'blended_risk_score': str(result.blended_risk_score),
+            'required_approval_level': result.required_approval_level,
+            'requires_finance': result.requires_finance,
+            'has_any_breach': result.has_any_breach,
+            'line_details': [
+                {
+                    'line_id': d.line_id,
+                    'product_name': d.product_name,
+                    'category_name': d.category_name,
+                    'discount_percent': str(d.discount_percent),
+                    'ceiling': str(d.ceiling),
+                    'overage': str(d.overage),
+                    'policy_status': d.policy_status,
+                }
+                for d in result.line_details
+            ],
+            'message': 'Quotation approved automatically (no approval needed).'
+                       if result.required_approval_level == 'none'
+                       else 'Quotation submitted for approval.',
+        })
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve quotation at current approval stage."""
+        quotation = self.get_object()
+        reason = request.data.get('reason', '')
+
         try:
-            dt = DiscountTier.objects.get(tier=customer_tier, category=line.product.category)
-            ceiling = dt.max_discount_pct
-        except DiscountTier.DoesNotExist:
-            ceiling = Decimal('5')  # default conservative ceiling
+            fully_approved = approve_quotation(quotation, request.user, reason)
+            quotation.refresh_from_db()
+            return Response({
+                'status': quotation.status,
+                'fully_approved': fully_approved,
+                'manager_approved': quotation.manager_approved,
+                'finance_approved': quotation.finance_approved,
+                'message': 'Quotation fully approved.' if fully_approved
+                           else 'Manager approved. Awaiting Finance approval.',
+            })
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        over = max(Decimal('0'), line.discount_pct - ceiling)
-        line_value = line.qty * line.unit_price
-        total_over += over * line_value / 100
-        worst_line_over = max(worst_line_over, over)
-        total_value += line_value
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject quotation."""
+        quotation = self.get_object()
+        reason = request.data.get('reason', '')
 
-    if total_value > 0:
-        blended = (total_over / total_value * 100 + worst_line_over) / 2
-    else:
-        blended = Decimal('0')
+        try:
+            reject_quotation(quotation, request.user, reason)
+            return Response({
+                'status': quotation.status,
+                'message': 'Quotation rejected.',
+            })
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    q.blended_risk_score = blended
+    @action(detail=True, methods=['post'], url_path='return')
+    def return_for_revision(self, request, pk=None):
+        """Return quotation for revision (back to Draft)."""
+        quotation = self.get_object()
+        reason = request.data.get('reason', '')
 
-    if blended <= 0:
-        q.status = 'approved'
-    else:
-        q.status = 'pending_approval'
+        try:
+            return_quotation(quotation, request.user, reason)
+            return Response({
+                'status': quotation.status,
+                'message': 'Quotation returned for revision.',
+            })
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    q.save()
+    @action(detail=True, methods=['get'], url_path='risk-score')
+    def risk_score(self, request, pk=None):
+        """Get detailed risk score breakdown for the approval screen."""
+        quotation = self.get_object()
+        result = compute_risk_score(quotation)
 
-    # Create approval log
-    from .models import ApprovalLog
-    ApprovalLog.objects.create(
-        quotation=q,
-        action='submitted',
-        actor=request.user,
-        note=f'Blended risk score: {blended:.2f}%',
-        role_required='sales_manager' if blended > 0 else 'none',
-    )
+        return Response({
+            'quotation_id': quotation.pk,
+            'blended_risk_score': str(result.blended_risk_score),
+            'has_any_breach': result.has_any_breach,
+            'required_approval_level': result.required_approval_level,
+            'requires_finance': result.requires_finance,
+            'total_order_value': str(result.total_order_value),
+            'total_weighted_overage': str(result.total_weighted_overage),
+            'line_details': [
+                {
+                    'line_id': d.line_id,
+                    'product_name': d.product_name,
+                    'category_name': d.category_name,
+                    'discount_percent': str(d.discount_percent),
+                    'ceiling': str(d.ceiling),
+                    'overage': str(d.overage),
+                    'line_value': str(d.line_value),
+                    'policy_status': d.policy_status,
+                }
+                for d in result.line_details
+            ],
+        })
 
-    return Response(QuotationSerializer(q).data)
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        """Confirm an approved quotation → proceeds to fulfillment."""
+        quotation = self.get_object()
+
+        if quotation.status != Quotation.Status.APPROVED:
+            return Response(
+                {'error': 'Only approved quotations can be confirmed.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quotation.status = Quotation.Status.CONFIRMED
+        quotation.save()
+
+        return Response({
+            'status': quotation.status,
+            'message': 'Quotation confirmed. Ready for fulfillment.',
+        })
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def customer_list(request):
-    """List all customers."""
-    customers = Customer.objects.all()
-    return Response(CustomerSerializer(customers, many=True).data)
+class QuotationLineViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for quotation lines.
+    Nested under quotation: /api/quotations/{quotation_id}/lines/
+    """
+
+    serializer_class = QuotationLineSerializer
+
+    def get_queryset(self):
+        return QuotationLine.objects.filter(
+            quotation_id=self.kwargs['quotation_pk']
+        ).select_related('product__category')
+
+    def perform_create(self, serializer):
+        quotation = get_object_or_404(Quotation, pk=self.kwargs['quotation_pk'])
+        product = serializer.validated_data['product']
+        serializer.save(
+            quotation=quotation,
+            unit_price=serializer.validated_data.get('unit_price', product.base_price),
+        )
+
+    def perform_update(self, serializer):
+        serializer.save()
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def product_list(request):
-    """List all products."""
-    products = Product.objects.filter(is_active=True).prefetch_related('variants')
-    category = request.query_params.get('category')
-    if category:
-        products = products.filter(category=category)
-    return Response(ProductSerializer(products, many=True).data)
+class ApprovalLogListView(generics.ListAPIView):
+    """List approval logs for a quotation."""
+    serializer_class = ApprovalLogSerializer
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def pipeline_summary(request):
-    """Pipeline summary for dashboard KPI cards."""
-    from django.db.models import Count, Sum, Avg
-    from decimal import Decimal
-
-    qs = Quotation.objects.all()
-    total_count = qs.count()
-
-    # Pipeline by status
-    pipeline = {}
-    for s in Quotation.Status:
-        items = qs.filter(status=s.value)
-        count = items.count()
-        total = sum(q.total_amount for q in items) if count > 0 else 0
-        pipeline[s.value] = {'count': count, 'total': total}
-
-    # Total active pipeline
-    active_statuses = ['draft', 'pending_approval', 'approved', 'sent', 'under_negotiation']
-    active_qs = qs.filter(status__in=active_statuses)
-    active_total = sum(q.total_amount for q in active_qs)
-
-    # Pending approvals
-    pending_count = qs.filter(status='pending_approval').count()
-
-    # At risk
-    at_risk = qs.filter(blended_risk_score__gt=5).count()
-
-    return Response({
-        'total_quotations': total_count,
-        'active_pipeline_value': active_total,
-        'active_pipeline_count': active_qs.count(),
-        'pending_approvals': pending_count,
-        'at_risk_count': at_risk,
-        'pipeline_by_status': pipeline,
-    })
+    def get_queryset(self):
+        return ApprovalLog.objects.filter(
+            quotation_id=self.kwargs['quotation_pk']
+        ).select_related('actor')

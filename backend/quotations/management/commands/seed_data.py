@@ -233,11 +233,11 @@ class Command(BaseCommand):
         # === Subscription Plans ===
         SubscriptionPlan.objects.get_or_create(
             name='Care Plan Monthly',
-            defaults={'product': care_plan, 'cycle': 'monthly', 'price': 45},
+            defaults={'product': care_plan, 'cycle': SubscriptionPlan.Cycle.MONTHLY, 'price': 45},
         )
         SubscriptionPlan.objects.get_or_create(
             name='Cloud Backup Monthly',
-            defaults={'product': cloud_backup, 'cycle': 'monthly', 'price': 29.99},
+            defaults={'product': cloud_backup, 'cycle': SubscriptionPlan.Cycle.MONTHLY, 'price': 29.99},
         )
 
         self.stdout.write(self.style.SUCCESS('  [OK] Subscription plans created'))
