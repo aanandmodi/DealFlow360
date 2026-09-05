@@ -1,135 +1,47 @@
-/**
- * Base API client — JWT header injection, error handling.
- */
 const BASE_URL = '/api';
-
-interface ApiError {
-  detail?: string;
-  message?: string;
-  [key: string]: unknown;
-}
-
 export class ApiClient {
-  private static getToken(): string | null {
-    return localStorage.getItem('access_token');
+  private static refreshing: Promise<string | null> | null = null;
+  static setTokens(access: string, refresh: string) { sessionStorage.setItem('access_token', access); sessionStorage.setItem('refresh_token', refresh); }
+  static clearTokens() { for (const storage of [localStorage,sessionStorage]) { storage.removeItem('access_token');storage.removeItem('refresh_token'); } }
+  private static async refresh(): Promise<string | null> {
+    if (!this.refreshing) this.refreshing = (async () => {
+      const token = sessionStorage.getItem('refresh_token');
+      if (!token) return null;
+      const response = await fetch('/api/auth/refresh/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh:token})});
+      if (!response.ok) return null;
+      const data = await response.json(); this.setTokens(data.access,data.refresh || token);return data.access;
+    })().finally(()=>{this.refreshing=null;});
+    return this.refreshing;
   }
-
-  static setTokens(access: string, refresh: string) {
-    localStorage.setItem('access_token', access);
-    localStorage.setItem('refresh_token', refresh);
+  private static async request(endpoint: string, options: RequestInit = {}) {
+    const publicPortal = endpoint.startsWith('/portal/quotations/') && endpoint !== '/portal/quotations/';
+    const headers: Record<string,string> = {'Content-Type':'application/json',...(options.headers as Record<string,string> || {})};
+    const token = sessionStorage.getItem('access_token');
+    if (token && !publicPortal) headers.Authorization = `Bearer ${token}`;
+    let response = await fetch(BASE_URL+endpoint,{...options,headers});
+    if (response.status===401 && token && !publicPortal && !endpoint.startsWith('/auth/login')) {
+      const access = await this.refresh();
+      if (access) { headers.Authorization=`Bearer ${access}`; response=await fetch(BASE_URL+endpoint,{...options,headers}); }
+      else { this.clearTokens();window.location.assign('/login'); }
+    }
+    if (!response.ok) throw await response.json().catch(()=>({detail:`Request failed (${response.status}). Please try again.`}));
+    return response;
   }
-
-  static clearTokens() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-  }
-
   static async fetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> || {}),
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    if (response.status === 401) {
-      // Try refresh
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (refreshToken) {
-        try {
-          const refreshRes = await fetch(`${BASE_URL}/auth/refresh/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh: refreshToken }),
-          });
-          if (refreshRes.ok) {
-            const data = await refreshRes.json();
-            localStorage.setItem('access_token', data.access);
-            headers['Authorization'] = `Bearer ${data.access}`;
-            const retryRes = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
-            if (!retryRes.ok) throw await retryRes.json();
-            return retryRes.json();
-          }
-        } catch {
-          this.clearTokens();
-          window.location.href = '/login';
-        }
-      }
-      this.clearTokens();
-      window.location.href = '/login';
-    }
-
-    if (!response.ok) {
-      const error: ApiError = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw error;
-    }
-
-    return response.json();
+    const response = await this.request(endpoint,options);
+    return response.status === 204 ? undefined as T : response.json();
   }
-
-  static get<T>(endpoint: string) {
-    return this.fetch<T>(endpoint);
-  }
-
-  static post<T>(endpoint: string, body?: unknown) {
-    return this.fetch<T>(endpoint, {
-      method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
-
-  static put<T>(endpoint: string, body?: unknown) {
-    return this.fetch<T>(endpoint, {
-      method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
-
-  static patch<T>(endpoint: string, body?: unknown) {
-    return this.fetch<T>(endpoint, {
-      method: 'PATCH',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
-
-  static delete<T>(endpoint: string) {
-    return this.fetch<T>(endpoint, { method: 'DELETE' });
-  }
+  static async download(endpoint: string) { return (await this.request(endpoint)).blob(); }
+  static get<T>(endpoint: string) { return this.fetch<T>(endpoint); }
+  static post<T>(endpoint:string,body?:unknown) {return this.fetch<T>(endpoint,{method:'POST',body:body===undefined?undefined:JSON.stringify(body)});}
+  static put<T>(endpoint:string,body?:unknown) {return this.fetch<T>(endpoint,{method:'PUT',body:JSON.stringify(body)});}
+  static patch<T>(endpoint:string,body?:unknown) {return this.fetch<T>(endpoint,{method:'PATCH',body:JSON.stringify(body)});}
+  static delete<T>(endpoint:string) {return this.fetch<T>(endpoint,{method:'DELETE'});}
 }
-
-interface RequestOptions extends RequestInit {
-  params?: Record<string, string>;
-}
-
-export function setTokens(access: string, refresh: string) {
-  ApiClient.setTokens(access, refresh);
-}
-
-export function clearTokens() {
-  ApiClient.clearTokens();
-}
-
-export function isAuthenticated(): boolean {
-  return !!localStorage.getItem('access_token');
-}
-
-export async function apiClient<T = unknown>(
-  endpoint: string,
-  options: RequestOptions = {},
-): Promise<T> {
-  const { params, ...init } = options;
-  let url = endpoint;
-  if (params) {
-    const searchParams = new URLSearchParams(params);
-    url += (url.includes('?') ? '&' : '?') + searchParams.toString();
-  }
-  return ApiClient.fetch<T>(url, init);
+export function setTokens(access:string,refresh:string){ApiClient.setTokens(access,refresh);}
+export function clearTokens(){ApiClient.clearTokens();}
+export function isAuthenticated(){return !!sessionStorage.getItem('access_token');}
+export function apiClient<T=unknown>(endpoint:string, options:RequestInit & {params?:Record<string,string>}={}) {
+  const {params,...init}=options; const query=params?new URLSearchParams(params).toString():'';
+  return ApiClient.fetch<T>(endpoint+(query?(endpoint.includes('?')?'&':'?')+query:''),init);
 }

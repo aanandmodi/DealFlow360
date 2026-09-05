@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('quotations/<int:pk>/order-discount/', views.order_discount),
     # Quotations CRUD
     path('quotations/', views.quotation_list, name='quotation-list'),
     path('quotations/create/', views.quotation_create, name='quotation-create'),

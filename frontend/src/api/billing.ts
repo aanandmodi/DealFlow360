@@ -16,6 +16,8 @@ export interface OneTimeLine {
 }
 
 export interface SubscriptionInfo {
+  plan_id: number;
+  available_plans: {id:number;name:string;price:string}[];
   plan_name: string;
   billing_cycle: string;
   plan_price: string;

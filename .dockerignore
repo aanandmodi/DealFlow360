@@ -1,0 +1,12 @@
+.git
+.env*
+**/venv
+**/node_modules
+**/__pycache__
+**/*.sqlite3
+**/*.log
+frontend/dist
+.local
+.qa
+.engineering_patch.py
+.runtime_setup.py

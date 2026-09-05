@@ -40,3 +40,8 @@ Thumbs.db
 
 # Docker
 pgdata/
+
+.local/
+.engineering_patch.py
+.runtime_setup.py
+.qa/

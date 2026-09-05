@@ -14,6 +14,13 @@ import { PortalNegotiationPage } from './features/portal-negotiation/PortalNegot
 import { FulfillmentPage } from './features/fulfillment/FulfillmentPage';
 import { BillingPage } from './features/billing/BillingPage';
 import './index.css';
+import './features/workspace/workspace.css';
+import { Dashboard } from './features/workspace/Dashboard';
+import { DealsPage } from './features/workspace/DealsPage';
+import { ConfigPage } from './features/workspace/ConfigPage';
+import { ReportsPage } from './features/workspace/ReportsPage';
+import { InvoicesPage } from './features/workspace/InvoicesPage';
+import { HealthPage } from './features/workspace/HealthPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +29,7 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-surface-canvas)' }}>
@@ -34,6 +41,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+  if (user?.role === 'customer') return <Navigate to="/portal" />;
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 }
 
@@ -63,22 +71,6 @@ function RoleRoute({ allowedRoles, children }: { allowedRoles: string[]; childre
   return <>{children}</>;
 }
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-2" style={{ letterSpacing: '-0.02em' }}>{title}</h1>
-      <p className="text-sm" style={{ color: 'var(--color-text-caption)' }}>
-        This screen will be built by Person B. Plug your component in here.
-      </p>
-      <div className="card mt-6 flex items-center justify-center py-24">
-        <span className="text-sm" style={{ color: 'var(--color-text-disabled)' }}>
-          Component placeholder — awaiting teammate integration
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function AppRoutes() {
   return (
     <Routes>
@@ -95,14 +87,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <AppShell>
             <Routes>
-              <Route path="/dashboard" element={<SalesDashboard />} />
-              <Route path="/quotations" element={<PipelinePage />} />
-              <Route path="/quotations/list" element={<QuotationListPage />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/quotations" element={<DealsPage />} />
+              <Route path="/quotations/list" element={<DealsPage />} />
               <Route path="/quotations/new" element={<QuotationBuilderPage />} />
               <Route path="/quotations/:id" element={<QuotationBuilderPage />} />
               <Route path="/approvals" element={
                 <RoleRoute allowedRoles={['sales_manager', 'finance', 'admin']}>
-                  <ApprovalListPage />
+                  <DealsPage approvals />
                 </RoleRoute>
               } />
               <Route path="/approvals/:id" element={
@@ -111,17 +103,17 @@ function AppRoutes() {
                 </RoleRoute>
               } />
               <Route path="/fulfillment" element={
-                <RoleRoute allowedRoles={['sales_manager', 'admin']}>
+                <RoleRoute allowedRoles={['sales_manager', 'finance', 'admin']}>
                   <FulfillmentPage />
                 </RoleRoute>
               } />
               <Route path="/subscriptions" element={<BillingPage />} />
-              <Route path="/invoices" element={<BillingPage />} />
-              <Route path="/deal-health" element={<DealHealthDashboard />} />
-              <Route path="/reports" element={<PlaceholderPage title="Reports — Executive Analytics" />} />
+              <Route path="/invoices" element={<InvoicesPage />} />
+              <Route path="/deal-health" element={<HealthPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
               <Route path="/config" element={
                 <RoleRoute allowedRoles={['sales_manager', 'admin']}>
-                  <PlaceholderPage title="Products & Config — use /admin/ for Django Admin" />
+                  <ConfigPage />
                 </RoleRoute>
               } />
               <Route path="/" element={<Navigate to="/dashboard" />} />

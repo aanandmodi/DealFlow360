@@ -8,6 +8,7 @@
  * - Confirmation view showing the audit trail entry
  */
 
+import { Notice } from '../workspace/shared';
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -82,7 +83,7 @@ export function ApprovalDetailPage() {
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Approval Queue
           </button>
           <h1 className="text-headline-xl flex items-center gap-3">
-            Discount Approval — Q-{id}
+            Discount Approval — {quotation.quote_number}
             <span className={`badge ${getStatusBadgeClass(quotation.status)}`}>
               <span className="badge-dot" /> {quotation.status_display}
             </span>
@@ -97,6 +98,7 @@ export function ApprovalDetailPage() {
         </div>
       </div>
 
+      <Notice error={approveMutation.error||rejectMutation.error||returnMutation.error}/>
       {/* Action Result Banner */}
       {actionTaken && (
         <div className={`mb-6 p-4 rounded-md border flex items-center gap-3 ${

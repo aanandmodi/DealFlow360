@@ -58,7 +58,7 @@ class Invoice(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.invoice_number} — ${self.amount} ({self.get_status_display()})"
+        return f"{self.invoice_number} — INR {self.amount} ({self.get_status_display()})"
 
 
 class Payment(models.Model):
@@ -75,7 +75,7 @@ class Payment(models.Model):
         constraints = [models.UniqueConstraint(fields=['invoice', 'reference'], name='unique_payment_reference')]
 
     def __str__(self):
-        return f"Payment ${self.amount} for {self.invoice.invoice_number}"
+        return f"Payment INR {self.amount} for {self.invoice.invoice_number}"
 
 
 class UpsellRule(models.Model):
@@ -103,6 +103,8 @@ class Subscription(models.Model):
     prorated_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     credit_note_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    current_invoice = models.ForeignKey(Invoice, null=True, blank=True, on_delete=models.PROTECT)
+    anchor_day = models.PositiveIntegerField(default=1)
 
 
 class CreditNote(models.Model):
@@ -110,3 +112,14 @@ class CreditNote(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reason = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
+    invoice = models.ForeignKey(Invoice, null=True, blank=True, on_delete=models.PROTECT, related_name='credits')
+
+
+class SubscriptionCharge(models.Model):
+    subscription = models.ForeignKey(Subscription, on_delete=models.PROTECT, related_name='charges')
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT)
+    period_start = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['subscription', 'invoice'], name='unique_subscription_invoice_charge')]

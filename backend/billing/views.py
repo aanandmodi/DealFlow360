@@ -33,8 +33,11 @@ def prorate_view(request, line_id):
     serializer = ProrateRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
+    if data['change_date'] != timezone.localdate():
+        raise serializers.ValidationError('Changes take effect today. Backdated and scheduled changes are not supported.')
     plan = get_object_or_404(SubscriptionPlan, pk=data['new_plan_id'], is_active=True) if data.get('new_plan_id') else None
     result = prorate_subscription_change(sub, data['change_date'], plan, data.get('new_quantity'))
+    audit_subscription(request, sub, 'Subscription quantity/plan changed with proration.')
     return Response(result.to_dict())
 
 
@@ -43,6 +46,7 @@ def prorate_view(request, line_id):
 def cancel_subscription_view(request, line_id):
     sub = subscription_for(request, line_id)
     result = cancel_subscription(sub, timezone.localdate())
+    audit_subscription(request, sub, 'Subscription cancelled and unused-period credit recorded.')
     return Response({'message': 'Subscription cancelled.', 'credit_note_amount': str(result.credit_amount), 'proration': result.to_dict()})
 
 
@@ -74,3 +78,10 @@ def invoice_payment(request, pk):
     serializer = PaymentInput(data=request.data)
     serializer.is_valid(raise_exception=True)
     return Response(record_payment(invoice, serializer.validated_data, request.user))
+
+
+
+def audit_subscription(request, sub, note):
+    from quotations.models import ApprovalLog
+    ApprovalLog.objects.create(quotation=sub.line.quotation, actor=request.user, action='subscription',
+                               role_required=request.user.role, note=note)

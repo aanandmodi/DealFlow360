@@ -5,6 +5,7 @@ from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
+from core.models import User, ConfigurationAudit
 from core.permissions import IsInternalUser
 from core.access import require_roles
 from quotations.models import Product, ProductVariant, Customer, DiscountTier, ApprovalChainRule, PriceList, PriceListItem
@@ -12,6 +13,7 @@ from fulfillment.models import Warehouse, StockLevel
 from billing.models import SubscriptionPlan, UpsellRule
 
 RESOURCES = {
+    'users': (User, ['username','first_name','last_name','email','role','is_active']),
     'products': (Product, ['name', 'sku', 'category', 'base_price', 'cost_price', 'unit', 'tax_pct', 'description', 'is_subscription', 'is_active']),
     'variants': (ProductVariant, ['product', 'attribute', 'value', 'extra_price']),
     'customers': (Customer, ['name', 'email', 'company', 'address', 'phone', 'tier']),
@@ -64,6 +66,13 @@ def configuration(request, resource, pk=None):
         raise ValidationError('Unknown configuration area.')
     if request.method != 'GET' and resource not in ('discounts', 'approvals'):
         require_roles(request.user, 'admin')
+    if resource == 'users':
+        require_roles(request.user, 'admin')
+        if request.method == 'POST':
+            raise ValidationError('Users request access through signup. Activate and assign their role here.')
+        if pk == request.user.pk and any(k in request.data for k in ('is_active','role')):
+            if request.data.get('role', request.user.role) != request.user.role or not request.data.get('is_active',True):
+                raise ValidationError('You cannot remove your own administrator access.')
     model, fields = RESOURCES[resource]
     serializer_class = serializer_for(model, fields)
     if request.method == 'GET':
@@ -87,5 +96,7 @@ def configuration(request, resource, pk=None):
     instance = get_object_or_404(model.objects.select_for_update(), pk=pk) if request.method == 'PATCH' else None
     serializer = serializer_class(instance, data=request.data, partial=request.method == 'PATCH')
     serializer.is_valid(raise_exception=True)
-    serializer.save()
+    saved = serializer.save()
+    ConfigurationAudit.objects.create(actor=request.user, resource=resource, record_id=saved.pk,
+        action='update' if instance else 'create', changed_fields=list(serializer.validated_data))
     return Response(serializer.data, status=200 if instance else 201)

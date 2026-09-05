@@ -21,6 +21,10 @@ import {
   Package, ArrowLeft, CheckCircle2, MinusCircle,
 } from 'lucide-react';
 import type { Quotation, QuotationLine } from '../../types';
+import { ApiClient } from '../../api/client';
+import { portalApi } from '../../api/portal';
+import { Notice, downloadFile } from '../workspace/shared';
+import { Link } from 'react-router-dom';
 import { UpsellPanel } from '../upsell-panel/UpsellPanel';
 
 export function QuotationBuilderPage() {
@@ -29,6 +33,11 @@ export function QuotationBuilderPage() {
   const queryClient = useQueryClient();
   const isNew = !id;
 
+  const [actionError,setActionError] = useState<unknown>();
+  const [portalLink,setPortalLink] = useState('');
+  const [variantId,setVariantId]=useState('');
+  const [orderDiscount,setOrderDiscount]=useState('');
+  const [sharing,setSharing] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<number>(0);
   const [notes, setNotes] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('Net 30 Days');
@@ -43,8 +52,8 @@ export function QuotationBuilderPage() {
   });
 
   const { data: productsData } = useQuery({
-    queryKey: ['products', selectedCategory],
-    queryFn: () => fetchProducts(selectedCategory ? { category: selectedCategory } : undefined),
+    queryKey: ['products', selectedCategory, selectedCustomer],
+    queryFn: () => fetchProducts({...(selectedCategory ? {category:selectedCategory}:{}), ...(selectedCustomer ? {customer:String(selectedCustomer)}:{})}),
   });
 
   const { data: customersData } = useQuery({
@@ -72,7 +81,7 @@ export function QuotationBuilderPage() {
   });
 
   const addLineMutation = useMutation({
-    mutationFn: (data: { product: number; quantity: number; unit_price: number; discount_percent: number }) =>
+    mutationFn: (data: { product: number; quantity: number; unit_price: number; discount_percent: number; variant?: number }) =>
       addLine(Number(id), data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotation', id] }),
   });
@@ -108,9 +117,10 @@ export function QuotationBuilderPage() {
   }, [selectedCustomer, notes, paymentTerms, createMutation]);
 
   const handleAddProduct = useCallback((productId: number, basePrice: string) => {
-    addLineMutation.mutate({ product: productId, quantity: 1, unit_price: parseFloat(basePrice), discount_percent: 0 });
+    addLineMutation.mutate({ product: productId, quantity: 1, unit_price: parseFloat(basePrice), discount_percent: 0, variant: variantId?Number(variantId):undefined });
+    setVariantId('');
     setShowProductPicker(false);
-  }, [addLineMutation]);
+  }, [addLineMutation, variantId]);
 
   const handleQuantityChange = useCallback((lineId: number, quantity: number) => {
     if (quantity < 1) return;
@@ -122,7 +132,7 @@ export function QuotationBuilderPage() {
     updateLineMutation.mutate({ lineId, discount_percent });
   }, [updateLineMutation]);
 
-  const isDraft = !quotation || quotation.status === 'draft' || quotation.status === 'under_negotiation';
+  const isDraft = !quotation || quotation.status === 'draft';
   const canEdit = isDraft;
 
   // === Render ===
@@ -139,7 +149,7 @@ export function QuotationBuilderPage() {
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Pipeline
           </button>
           <h1 className="text-headline-xl">
-            {isNew ? 'New Quotation' : `Quotation Q-${id}`}
+            {isNew ? 'New Quotation' : quotation?.quote_number || 'Quotation'}
           </h1>
           {quotation && (
             <div className="flex items-center gap-3 mt-1">
@@ -163,27 +173,20 @@ export function QuotationBuilderPage() {
               </button>
               <button
                 onClick={() => submitMutation.mutate()}
-                disabled={lines.length === 0}
+                disabled={lines.length === 0 || submitMutation.isPending || addLineMutation.isPending || updateLineMutation.isPending || saveMutation.isPending}
                 className="flex items-center gap-1.5 px-4 h-9 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-semibold rounded border border-[var(--color-primary-hover)] transition disabled:opacity-50"
               >
                 <Send className="w-4 h-4" /> Submit for Approval
               </button>
             </>
           )}
-          {quotation && (
-            <a
-              href={`/portal/quotations/${(quotation as any).portal_token || quotation.quote_number || quotation.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 h-9 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-semibold rounded transition text-xs"
-              title="Open customer-facing portal view for this deal"
-            >
-              <Eye className="w-3.5 h-3.5" /> Customer Portal
-            </a>
-          )}
+          {quotation && <><button className="btn btn-secondary" onClick={()=>downloadFile(`/quotations/${id}/pdf/`,`${quotation.quote_number}.pdf`).catch(setActionError)}>Download PDF</button>{['approved','sent'].includes(quotation.status)&&<button disabled={sharing} className="btn btn-primary" onClick={async()=>{setSharing(true);setActionError(null);try{const result=await portalApi.requestMagicLink('',Number(id));setPortalLink(result.link);queryClient.invalidateQueries();}catch(e){setActionError(e);}finally{setSharing(false);}}}><Eye size={16}/>{sharing?'Creating link…':'Create customer link'}</button>}{quotation.status==='pending_approval'&&<Link className="btn btn-secondary" to={`/approvals/${id}`}>View approval</Link>}{['confirmed','fulfillment','invoiced','paid'].includes(quotation.status)&&<Link className="btn btn-primary" to="/invoices">View invoices</Link>}</>}
+
         </div>
       </div>
 
+      <Notice error={actionError || createMutation.error || addLineMutation.error || updateLineMutation.error || deleteLineMutation.error || submitMutation.error || saveMutation.error}/>
+      {portalLink && <div className="notice"><ShieldCheck size={18}/><div>Customer link created. Share this private link with your customer.<br/><a className="text-link" href={portalLink} target="_blank" rel="noreferrer">Open customer quotation ↗</a></div><button className="btn btn-secondary btn-sm" onClick={()=>navigator.clipboard.writeText(portalLink).catch(setActionError)}>Copy link</button></div>}
       {/* Submit result banner */}
       {submitMutation.isSuccess && (
         <div className={`mb-4 p-4 rounded border flex items-start gap-3 ${
@@ -303,7 +306,7 @@ export function QuotationBuilderPage() {
               {showProductPicker && (
                 <div className="border-b border-[var(--color-border)] bg-[var(--color-canvas)] p-4">
                   <div className="flex gap-2 mb-3">
-                    {['', 'Hardware', 'Services', 'Warranty', 'Subscription'].map(cat => (
+                    {['', 'hardware', 'services', 'software', 'subscriptions'].map(cat => (
                       <button
                         key={cat}
                         onClick={() => setSelectedCategory(cat)}
@@ -317,9 +320,11 @@ export function QuotationBuilderPage() {
                       </button>
                     ))}
                   </div>
+                  <label className="mb-3">Variant (optional)<select value={variantId} onChange={e=>setVariantId(e.target.value)}><option value="">Standard configuration</option>{products.flatMap(p=>((p as any).variants||[]).map((v:any)=><option key={v.id} value={v.id}>{p.name} · {v.attribute}: {v.value} (+{formatCurrency(v.extra_price)})</option>))}</select></label>
                   <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                     {products.map(p => (
                       <button
+                        disabled={!!variantId && !(p as any).variants?.some((v:any)=>v.id===Number(variantId))}
                         key={p.id}
                         onClick={() => handleAddProduct(p.id, p.base_price)}
                         className="flex items-center gap-3 p-2.5 bg-white border border-[var(--color-border)] rounded hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition text-left"
@@ -338,7 +343,7 @@ export function QuotationBuilderPage() {
               )}
 
               {/* Items Table */}
-              <table className="w-full">
+              <div className="table-scroll"><table className="w-full">
                 <thead>
                   <tr className="bg-[var(--color-canvas)]">
                     <th className="text-label-uppercase text-left px-4 py-2 border-b border-[var(--color-border)]">Product</th>
@@ -410,7 +415,7 @@ export function QuotationBuilderPage() {
                     </tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
@@ -418,6 +423,7 @@ export function QuotationBuilderPage() {
           {!isNew && lines.length > 0 && (
             <UpsellPanel
               quotationId={Number(id)}
+              revision={quotation?.updated_at}
               onAddProduct={canEdit ? handleAddProduct : undefined}
             />
           )}
@@ -449,11 +455,12 @@ export function QuotationBuilderPage() {
                 <hr className="border-[var(--color-border)]" />
                 <div className="flex justify-between text-base font-semibold">
                   <span>Grand Total</span>
-                  <span className="font-mono">{formatCurrency(quotation.total)}</span>
+                  <span className="font-mono">{formatCurrency(Number(quotation.total) + Number(quotation.tax_amount))}</span>
                 </div>
               </div>
             </div>
 
+            {canEdit&&<form className="panel p-4" onSubmit={async e=>{e.preventDefault();try{await ApiClient.post(`/quotations/${id}/order-discount/`,{discount_percent:orderDiscount});queryClient.invalidateQueries();}catch(err){setActionError(err);}}}><label>Apply one discount to every line (%)<input type="number" min="0" max="100" step="0.01" required value={orderDiscount} onChange={e=>setOrderDiscount(e.target.value)}/></label><button className="btn btn-secondary full-width mt-3">Apply to all lines</button></form>}
             {/* Margin & Risk */}
             <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1 p-4">
               <h3 className="text-title-sm mb-3">Margin & Risk Analysis</h3>
@@ -505,7 +512,7 @@ export function QuotationBuilderPage() {
                   { label: 'Submitted', active: quotation.status !== 'draft' },
                   { label: 'Sales Manager', active: quotation.manager_approved },
                   { label: 'Finance / Ops', active: quotation.finance_approved, needed: quotation.required_approval_level === 'manager_finance' },
-                  { label: 'Confirmed', active: quotation.status === 'confirmed' || quotation.status === 'approved' },
+                  { label: 'Confirmed', active: ['confirmed','fulfillment','invoiced','paid'].includes(quotation.status) },
                 ].map((step, i) => (
                   <div key={i} className="flex items-center gap-2.5">
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 ${
@@ -533,20 +540,7 @@ export function QuotationBuilderPage() {
               </div>
             </div>
 
-            {/* Upsell & Cross-Sell Recommendations (Person B) */}
-            <UpsellPanel
-              quotationId={quotation.id}
-              onAddProduct={(productId) => {
-                const prod = products.find((p) => p.id === productId);
-                const price = prod ? Number(prod.base_price) : 0;
-                addLineMutation.mutate({
-                  product: productId,
-                  quantity: 1,
-                  unit_price: price,
-                  discount_percent: 0,
-                });
-              }}
-            />
+
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@
  * Auth context — manages login state, user, tokens.
  */
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ApiClient } from '../api/client';
 
 // Define User type inline to avoid esbuild import stripping issues
@@ -41,11 +42,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    const token = sessionStorage.getItem('access_token');
     if (token) {
       authApiInline.me()
         .then(setUser)
@@ -62,10 +66,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     const res = await authApiInline.login(username, password);
     ApiClient.setTokens(res.tokens.access, res.tokens.refresh);
+    queryClient.clear();
     setUser(res.user);
   };
 
   const logout = () => {
+    const refresh = sessionStorage.getItem('refresh_token');
+    if (refresh) ApiClient.post('/auth/logout/', {refresh}).catch(() => {});
+    queryClient.clear();
     ApiClient.clearTokens();
     setUser(null);
   };

@@ -1,0 +1,29 @@
+{$APP_DOMAIN} {
+    encode zstd gzip
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    }
+    request_body {
+        max_size 1MB
+    }
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    # Django administration stays private; use the workspace configuration UI.
+    handle /admin* {
+        respond 404
+    }
+    handle {
+        root * /srv
+        header Cache-Control "no-store"
+        try_files {path} /index.html
+        file_server
+    }
+    # Access logging is deliberately disabled: customer URLs contain bearer links.
+}

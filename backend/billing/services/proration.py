@@ -40,12 +40,12 @@ class ProrationResult:
         }
 
 
-def _next_cycle_date(current: date, cycle: str) -> date:
+def _next_cycle_date(current: date, cycle: str, anchor_day=None) -> date:
     months = {'monthly': 1, 'quarterly': 3, 'yearly': 12}[cycle]
     index = current.year * 12 + current.month - 1 + months
     year, month = divmod(index, 12)
     month += 1
-    return date(year, month, min(current.day, calendar.monthrange(year, month)[1]))
+    return date(year, month, min(anchor_day or current.day, calendar.monthrange(year, month)[1]))
 
 
 def _cycle_days(cycle, reference_date):
@@ -60,7 +60,9 @@ def get_billing_schedule(quotation):
                     unit_price=str(line.unit_price), discount_percent=str(line.discount_pct), line_total=str(line.line_total))
         if line.is_subscription:
             sub = Subscription.objects.filter(line=line).select_related('plan').first()
-            item['subscription'] = None if not sub else dict(plan_name=sub.plan.name, billing_cycle=sub.plan.cycle,
+            item['quantity'] = str(sub.quantity) if sub else item['quantity']
+            item['subscription'] = None if not sub else dict(plan_id=sub.plan_id, plan_name=sub.plan.name, billing_cycle=sub.plan.cycle,
+                available_plans=[{'id':p.id,'name':p.name,'price':str(p.price)} for p in sub.plan.__class__.objects.filter(product=line.product,cycle=sub.plan.cycle,is_active=True)],
                 plan_price=str(sub.unit_price * sub.quantity), next_billing_date=str(sub.next_billing_date),
                 status=sub.status, prorated_amount=str(sub.prorated_amount), credit_note_amount=str(sub.credit_note_amount))
             recurring.append(item)
@@ -99,15 +101,26 @@ def prorate_subscription_change(subscription_line, change_date, new_plan=None, n
     new_total = price * qty
     charge = (new_total * remaining / days).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     credit = (old_total * remaining / days).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    from .lifecycle import apply_credit
+    if charge > Decimal('9999999999.99'):
+        raise ValidationError('This change exceeds the supported invoice amount.')
     delta = charge - credit
+    tax_multiplier = 1 + (sub.line.tax_pct if sub.line.tax_pct is not None else sub.line.product.tax_pct) / 100
+    if abs(delta * tax_multiplier) > Decimal('9999999999.99'):
+        raise ValidationError('This change exceeds the supported invoice amount.')
     if delta < 0:
-        CreditNote.objects.create(subscription=sub, amount=-delta, reason='Mid-cycle subscription reduction')
+        apply_credit(sub, (-delta*tax_multiplier).quantize(Decimal('0.01')), 'Mid-cycle subscription reduction')
     elif delta > 0:
-        Invoice.objects.create(quotation=sub.line.quotation, invoice_number=f'ADJ-{uuid4().hex[:12]}',
-            type='recurring', amount=delta, status='sent', due_date=change_date)
+        adjustment = Invoice.objects.create(quotation=sub.line.quotation, invoice_number=f'ADJ-{uuid4().hex[:12]}',
+            type='recurring', amount=(delta*tax_multiplier).quantize(Decimal('0.01')), status='sent', due_date=change_date)
+        from billing.models import SubscriptionCharge
+        SubscriptionCharge.objects.create(subscription=sub, invoice=adjustment, period_start=sub.start_date, amount=adjustment.amount)
+        if sub.line.quotation.status == 'paid':
+            sub.line.quotation.status = 'invoiced'
+            sub.line.quotation.save()
     sub.quantity, sub.unit_price = qty, price
     sub.prorated_amount = delta
-    sub.credit_note_amount += max(Decimal(0), -delta)
+    sub.credit_note_amount += (max(Decimal(0), -delta) * tax_multiplier).quantize(Decimal('0.01'))
     if new_plan:
         sub.plan = new_plan
     sub.save()
@@ -122,7 +135,9 @@ def cancel_subscription(subscription_line, cancel_date):
     price = sub.unit_price * sub.quantity
     credit = (price * remaining / days * sub.plan.cancellation_refund_pct / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     if credit > 0:
-        CreditNote.objects.create(subscription=sub, amount=credit, reason='Cancellation: unused prepaid period')
+        from .lifecycle import apply_credit
+        credit = (credit * (1 + (sub.line.tax_pct if sub.line.tax_pct is not None else sub.line.product.tax_pct) / 100)).quantize(Decimal('0.01'))
+        apply_credit(sub, credit, 'Cancellation: unused prepaid period')
     sub.status, sub.cancelled_at = 'cancelled', timezone.now()
     sub.credit_note_amount += credit
     sub.save()

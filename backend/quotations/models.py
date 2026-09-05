@@ -62,6 +62,10 @@ class Product(models.Model):
     class Meta:
         db_table = 'quotations_product'
         ordering = ['name']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(base_price__gte=0, cost_price__gte=0), name='product_prices_nonnegative'),
+            models.CheckConstraint(condition=models.Q(tax_pct__gte=0, tax_pct__lte=100), name='product_tax_range'),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.get_category_display()}) — ${self.base_price}"
@@ -271,8 +275,8 @@ class Quotation(models.Model):
         total = self.total_amount
         if total == 0:
             return 0
-        cost = sum(line.qty * line.product.cost_price for line in self.lines.all())
-        return round(((float(total) - cost) / float(total)) * 100, 1)
+        cost = sum(line.qty * (line.cost_price if line.cost_price is not None else line.product.cost_price) for line in self.lines.all())
+        return float(((total - cost) / total * 100).quantize(Decimal('0.1')))
 
 
 class QuotationLine(models.Model):
@@ -285,10 +289,24 @@ class QuotationLine(models.Model):
     discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     line_limit_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     is_subscription = models.BooleanField(default=False)
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    tax_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    variant = models.ForeignKey(ProductVariant, null=True, blank=True, on_delete=models.PROTECT)
+
+    def save(self, *args, **kwargs):
+        if self.cost_price is None:
+            self.cost_price = self.product.cost_price
+        if self.tax_pct is None:
+            self.tax_pct = self.product.tax_pct
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'quotations_quotation_line'
         ordering = ['id']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(qty__gt=0, unit_price__gte=0), name='quote_line_positive_quantity_price'),
+            models.CheckConstraint(condition=models.Q(discount_pct__gte=0, discount_pct__lte=100), name='quote_line_discount_range'),
+        ]
 
     def __str__(self):
         return f"{self.product.name} x{self.qty} @ ${self.unit_price} ({self.discount_pct}% off)"
@@ -319,7 +337,7 @@ class QuotationLine(models.Model):
 
     @property
     def tax_amount(self):
-        return (self.line_total * self.product.tax_pct / 100).quantize(Decimal('0.01'))
+        return (self.line_total * (self.tax_pct if self.tax_pct is not None else self.product.tax_pct) / 100).quantize(Decimal('0.01'))
 
     @property
     def category_name(self):

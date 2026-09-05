@@ -1,18 +1,21 @@
-version: '3.9'
-
+name: dealflow360-local
 services:
   db:
-    image: postgres:15
-    container_name: dealflow360_db
+    image: postgres:18-alpine
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dealflow360}
       POSTGRES_USER: ${POSTGRES_USER:-dealflow360}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dealflow360pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique POSTGRES_PASSWORD in .env}
     volumes:
-      - pgdata:/var/lib/postgresql/data
-
+      - pgdata18:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 volumes:
-  pgdata:
+  pgdata18:
+# Existing pgdata volumes are preserved. Dump/restore to upgrade PostgreSQL.

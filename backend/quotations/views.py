@@ -15,7 +15,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from .models import (
-    Quotation, QuotationLine, Customer, Product, DiscountTier, ApprovalLog,
+    Quotation, QuotationLine, Customer, Product, DiscountTier, ApprovalLog, ProductVariant,
 )
 from .serializers import (
     QuotationSerializer, QuotationListSerializer, QuotationLineSerializer,
@@ -65,6 +65,7 @@ def quotation_list(request):
         if not cust_id:
             return Response({'error': 'Customer ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        cust_id = serializers.IntegerField(min_value=1).run_validation(cust_id)
         try:
             customer = Customer.objects.get(id=cust_id)
         except Customer.DoesNotExist:
@@ -77,8 +78,8 @@ def quotation_list(request):
             customer=customer,
             rep=request.user,
             status=Quotation.Status.DRAFT,
-            notes=data.get('notes', ''),
-            payment_terms=data.get('payment_terms', 'Net 30 Days'),
+            notes=serializers.CharField(max_length=10000,allow_blank=True).run_validation(data.get('notes','')),
+            payment_terms=serializers.ChoiceField(choices=['Net 30 Days','Net 60 Days','Due on Receipt']).run_validation(data.get('payment_terms','Net 30 Days')),
             portal_token=str(uuid.uuid4()),
         )
         return Response(QuotationSerializer(q).data, status=status.HTTP_201_CREATED)
@@ -101,19 +102,23 @@ def quotation_detail(request, pk):
 
     elif request.method == 'PATCH':
         data = request.data
+        if 'valid_until' in data:
+            data = dict(data)
+            data['valid_until'] = serializers.DateField(allow_null=True).run_validation(data['valid_until'])
         if 'notes' in data:
-            q.notes = data['notes']
+            q.notes = serializers.CharField(max_length=10000,allow_blank=True).run_validation(data['notes'])
         if 'payment_terms' in data:
-            q.payment_terms = data['payment_terms']
+            q.payment_terms = serializers.ChoiceField(choices=['Net 30 Days','Net 60 Days','Due on Receipt']).run_validation(data['payment_terms'])
         if 'valid_until' in data:
             q.valid_until = data['valid_until']
         if 'customer' in data or 'customer_id' in data:
-            cid = data.get('customer') or data.get('customer_id')
+            cid = serializers.IntegerField(min_value=1).run_validation(data.get('customer') or data.get('customer_id'))
             try:
                 q.customer = Customer.objects.get(id=cid)
             except Customer.DoesNotExist:
-                pass
+                raise ValidationError('Customer not found.')
         q.save()
+        audit_edit(q, request.user)
         return Response(QuotationSerializer(q).data)
 
     elif request.method == 'DELETE':
@@ -125,7 +130,7 @@ def quotation_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def quotation_create(request):
     """Helper create endpoint for Person C compatibility."""
-    return quotation_list(request)
+    return quotation_list.cls().post(request)
 
 
 @api_view(['GET', 'POST'])
@@ -147,12 +152,15 @@ def quotation_lines(request, pk):
         if not prod_id:
             return Response({'error': 'Product ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        product = get_object_or_404(Product, pk=prod_id)
+        product = get_object_or_404(Product, pk=serializers.IntegerField(min_value=1).run_validation(prod_id))
         qty, discount_pct = validated_line(data, product)
         from .models import PriceListItem
         price = PriceListItem.objects.filter(product=product, price_list__tier=q.customer.tier,
                     price_list__currency='INR', price_list__is_active=True).first()
         unit_price = price.price if price else product.base_price
+        variant = get_object_or_404(ProductVariant, pk=data['variant'], product=product) if data.get('variant') else None
+        if variant:
+            unit_price += variant.extra_price
 
         line = QuotationLine.objects.create(
             quotation=q,
@@ -160,7 +168,8 @@ def quotation_lines(request, pk):
             qty=qty,
             unit_price=unit_price,
             discount_pct=discount_pct,
-            is_subscription=product.is_subscription,
+            is_subscription=product.is_subscription, variant=variant,
+            description=f"{variant.attribute}: {variant.value}" if variant else product.description[:300],
         )
         audit_edit(q, request.user)
         return Response(QuotationLineSerializer(line).data, status=status.HTTP_201_CREATED)
@@ -356,10 +365,16 @@ def product_list(request):
     cat = request.query_params.get('category')
     if cat:
         products = products.filter(category=cat)
-    return Response({
-        'count': products.count(),
-        'results': ProductSerializer(products, many=True).data,
-    })
+    data = ProductSerializer(products, many=True).data
+    if request.query_params.get('customer'):
+        from .models import PriceListItem
+        customer = get_object_or_404(Customer, pk=request.query_params['customer'])
+        overrides = dict(PriceListItem.objects.filter(price_list__tier=customer.tier, price_list__is_active=True,
+                        price_list__currency='INR').values_list('product_id','price'))
+        for item in data:
+            if item['id'] in overrides:
+                item['base_price'] = str(overrides[item['id']])
+    return Response({'count':products.count(),'results':data})
 
 
 @api_view(['GET'])
@@ -411,5 +426,19 @@ def validated_line(data, product, line=None):
 
 
 def audit_edit(q, actor):
-    q.save(update_fields=['updated_at'])
+    result = compute_risk_score(q)
+    q.blended_risk_score = result.blended_risk_score
+    q.required_approval_level = result.required_approval_level
+    q.save(update_fields=['updated_at', 'blended_risk_score', 'required_approval_level'])
     ApprovalLog.objects.create(quotation=q, actor=actor, action='edited', note='Draft line updated.', role_required=actor.role)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def order_discount(request, pk):
+    q = quote_for(request, pk, lock=True)
+    editable(q)
+    pct = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100).run_validation(request.data.get('discount_percent'))
+    q.lines.update(discount_pct=pct)
+    audit_edit(q, request.user)
+    return Response(QuotationSerializer(q).data)

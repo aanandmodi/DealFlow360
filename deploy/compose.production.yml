@@ -1,0 +1,90 @@
+name: dealflow360-production
+x-app: &app
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile
+  environment: &app-env
+    DJANGO_DEBUG: "False"
+    DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set a random secret of at least 50 characters}
+    DJANGO_ALLOWED_HOSTS: ${APP_DOMAIN:?Set the public domain},127.0.0.1,localhost
+    FRONTEND_URL: https://${APP_DOMAIN}
+    USE_SQLITE: "0"
+    TRUST_PROXY: "1"
+    POSTGRES_DB: dealflow360
+    POSTGRES_USER: dealflow360
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a random database password}
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    REDIS_URL: redis://cache:6379/1
+    JWT_ACCESS_TOKEN_LIFETIME_MINUTES: "15"
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: [/tmp]
+  networks: [private]
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: dealflow360
+      POSTGRES_USER: dealflow360
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a random database password}
+    volumes: ["postgres:/var/lib/postgresql"]
+    networks: [private]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U dealflow360"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  cache:
+    image: redis:7-alpine
+    command: [redis-server, --save, "", --appendonly, "no"]
+    networks: [private]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  migrate:
+    <<: *app
+    command: [python, manage.py, migrate, --noinput]
+    restart: "no"
+    depends_on:
+      db: {condition: service_healthy}
+      cache: {condition: service_healthy}
+  backend:
+    <<: *app
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/api/health/',headers={'X-Forwarded-Proto':'https'}))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+  billing-worker:
+    <<: *app
+    command: [python, manage.py, run_billing, --watch]
+    depends_on:
+      backend: {condition: service_healthy}
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set the public domain}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes: ["caddy-data:/data", "caddy-config:/config"]
+    networks: [private, edge]
+    restart: unless-stopped
+    depends_on:
+      backend: {condition: service_healthy}
+networks:
+  private: {internal: true}
+  edge: {}
+volumes:
+  postgres: {}
+  caddy-data: {}
+  caddy-config: {}

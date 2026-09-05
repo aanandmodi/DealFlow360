@@ -1,0 +1,14 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { ArrowUpRight, Bell, ShieldCheck } from 'lucide-react';
+import { ApiClient } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
+import { PageHead, Stat, Notice, Loading, Empty } from './shared';
+type Alert={quotation_id:number;quote_number:string;customer_name:string;severity:string;days_idle?:number;days_late?:number;issue?:string;warehouse_name?:string};
+export function HealthPage(){
+ const qc=useQueryClient();const {user}=useAuth();
+ const query=useQuery({queryKey:['health'],queryFn:async()=>{const [stalled,anomalies,slippage]=await Promise.all([ApiClient.get<Alert[]>('/dashboard/stalled-deals/'),ApiClient.get<Alert[]>('/dashboard/anomalies/'),ApiClient.get<Alert[]>('/dashboard/slippage/')]);return {stalled,anomalies,slippage};},refetchInterval:30000});
+ const nudge=useMutation({mutationFn:(id:number)=>ApiClient.post(`/quotations/${id}/nudge/`,{reason:'Please review this deal health alert and update the next action.'}),onSuccess:()=>qc.invalidateQueries({queryKey:['quotation']})});
+ const groups=[['Stalled deals',query.data?.stalled||[]],['Discount anomalies',query.data?.anomalies||[]],['Delivery slippage',query.data?.slippage||[]]] as [string,Alert[]][];
+ return <div className="workspace-page"><PageHead eyebrow="DEAL HEALTH" title="See the risk. Save the deal." description="Spot stalled conversations, unusual discounts and delivery promises that need attention."/><Notice error={query.error||nudge.error}/><Notice message={nudge.isSuccess?'Escalation saved to the quotation audit trail.':undefined}/><div className="metrics-grid three">{groups.map(([name,items])=><Stat key={name} label={name} value={items.length} note={name==='Stalled deals'?'No activity for more than 14 days':name==='Discount anomalies'?'Above the representative’s historical average':'Past the promised shipment date'}/>)}</div>{query.isLoading?<Loading/>:groups.map(([name,items])=><section className="panel" key={name}><div className="panel-head"><h2>{name}</h2><ShieldCheck size={18}/></div>{items.length?items.map((a,i)=><div className="health-row" key={`${a.quotation_id}-${i}`}><span className={`pill ${a.severity==='high'?'pill-red':'pill-amber'}`}>{a.severity}</span><div><Link to={`/quotations/${a.quotation_id}`}><strong>{a.customer_name} <ArrowUpRight size={14}/></strong></Link><small>{a.issue|| (a.days_idle?`Inactive for ${a.days_idle} days`:`${a.warehouse_name} · ${a.days_late} days late`)} · {a.quote_number}</small></div>{user?.role!=='sales_rep'&&<button disabled={nudge.isPending} className="btn btn-secondary btn-sm" onClick={()=>nudge.mutate(a.quotation_id)}><Bell size={14}/>Escalate</button>}</div>):<Empty title="No issues detected" text="This check is clear for the deals you can access."/>}</section>)}</div>;
+}

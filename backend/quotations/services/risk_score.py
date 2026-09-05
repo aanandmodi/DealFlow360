@@ -36,12 +36,9 @@ def get_ceiling_for_line(category: str, customer_tier: str) -> Decimal:
     """
     Get discount ceiling for a product category and customer tier.
     """
-    try:
-        dt = DiscountTier.objects.filter(tier=customer_tier, category=category).first()
-        if dt:
-            return Decimal(str(dt.max_discount_pct))
-    except Exception:
-        pass
+    dt = DiscountTier.objects.filter(tier=customer_tier, category=category).first()
+    if dt:
+        return dt.max_discount_pct
 
     fallback_map = {
         'gold': {'hardware': Decimal('15'), 'services': Decimal('10'), 'subscriptions': Decimal('15'), 'software': Decimal('20')},
@@ -219,6 +216,7 @@ def reject_quotation(quotation: Quotation, actor, reason: str = ''):
     if quotation.status != Quotation.Status.PENDING_APPROVAL:
         raise ValueError(f"Cannot reject quotation in status: {quotation.status}")
 
+    require_reviewer(quotation, actor)
     quotation.status = Quotation.Status.REJECTED
     quotation.save()
 
@@ -239,6 +237,7 @@ def return_quotation(quotation: Quotation, actor, reason: str = ''):
     if quotation.status != Quotation.Status.PENDING_APPROVAL:
         raise ValueError(f"Cannot return quotation in status: {quotation.status}")
 
+    require_reviewer(quotation, actor)
     quotation.status = Quotation.Status.DRAFT
     quotation.manager_approved = False
     quotation.finance_approved = False
@@ -252,3 +251,10 @@ def return_quotation(quotation: Quotation, actor, reason: str = ''):
         blended_risk_score_at_action=quotation.blended_risk_score,
         note=reason or 'Returned to rep for revision',
     )
+
+
+
+def require_reviewer(quotation, actor):
+    role = 'finance' if quotation.manager_approved and quotation.required_approval_level == 'manager_finance' else 'sales_manager'
+    if actor.pk == quotation.rep_id or actor.role not in (role, 'admin'):
+        raise ValueError('Only the assigned review role may decide this stage; owners cannot review their own exceptions.')

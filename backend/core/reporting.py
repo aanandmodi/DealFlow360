@@ -36,6 +36,8 @@ def reports(request):
              'rep': q.rep.get_full_name() if q.rep else 'Unassigned', 'status': q.status,
              'amount': q.total_amount, 'discount': q.total_discount, 'margin': q.margin_pct,
              'created': q.created_at.date()} for q in quotes]
+    if request.query_params.get('export') in ('xlsx','pdf'):
+        return report_file(rows, request.query_params['export'])
     if request.query_params.get('export') == 'csv':
         output = StringIO()
         writer = csv.writer(output)
@@ -94,3 +96,67 @@ def nudge(request, pk):
     note = serializers.CharField(max_length=1000).run_validation(request.data.get('reason', 'Manager requested an update on this deal.'))
     ApprovalLog.objects.create(quotation=q, actor=request.user, action='escalated', note=note, role_required='sales_rep')
     return Response({'message': 'Escalation recorded in the deal activity trail.'})
+
+
+
+def report_file(rows, kind):
+    keys = ['quote_number','customer','rep','status','amount','discount','margin','created']
+    headers = ['Quotation','Customer','Representative','Stage','Net INR','Discount INR','Margin %','Created']
+    output = BytesIO()
+    if kind == 'xlsx':
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Deal performance'
+        sheet.append(headers)
+        for row in rows:
+            sheet.append([safe_cell(row[k]) if isinstance(row[k],str) else row[k] for k in keys])
+        for cell in sheet[1]:
+            cell.fill = PatternFill('solid',fgColor='245B49')
+            cell.font = Font(color='FFFFFF',bold=True)
+            cell.alignment = Alignment(vertical='center')
+        sheet.row_dimensions[1].height = 28
+        for index,width in enumerate([23,34,24,24,20,20,15,18],1):
+            sheet.column_dimensions[get_column_letter(index)].width = width
+        for row in sheet.iter_rows(min_row=2):
+            for cell in row:
+                cell.alignment = Alignment(vertical='center')
+            for index in (4,5):
+                row[index].number_format = '"INR "#,##0.00'
+            row[7].number_format = 'dd mmm yyyy'
+        sheet.freeze_panes='A2'
+        sheet.auto_filter.ref=sheet.dimensions
+        workbook.save(output)
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else:
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from xml.sax.saxutils import escape
+        styles=getSampleStyleSheet()
+        styles['Normal'].fontSize=8
+        styles['Normal'].leading=12
+        doc=SimpleDocTemplate(output,pagesize=landscape(A4),leftMargin=32,rightMargin=32,topMargin=32,bottomMargin=32)
+        content=[Paragraph('DealFlow360 | Deal performance',styles['Title']),
+            Paragraph(f'{len(rows)} quotations | Currency: INR | Generated {timezone.localdate()}',styles['Normal']),Spacer(1,20)]
+        data=[headers]
+        for row in rows:
+            data.append([Paragraph(escape(f'{row[k]:,.2f}' if k in ('amount','discount','margin') else str(row[k])),styles['Normal']) for k in keys])
+        table=Table(data,colWidths=[90,150,95,90,100,95,60,85],repeatRows=1)
+        table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#245B49')),('TEXTCOLOR',(0,0),(-1,0),colors.white),
+            ('FONTSIZE',(0,0),(-1,-1),8),('TOPPADDING',(0,0),(-1,-1),10),('BOTTOMPADDING',(0,0),(-1,-1),10),
+            ('VALIGN',(0,0),(-1,-1),'TOP'),('LINEBELOW',(0,0),(-1,-1),.5,colors.HexColor('#E1E6D9'))]))
+        content.append(table)
+        def footer(canvas, doc):
+            canvas.setFont('Helvetica',8)
+            canvas.setFillColor(colors.HexColor('#6D7B60'))
+            canvas.drawString(32,18,'DealFlow360 - Internal sales report')
+            canvas.drawRightString(810,18,f'Page {doc.page}')
+        doc.build(content,onFirstPage=footer,onLaterPages=footer)
+        content_type='application/pdf'
+    response=HttpResponse(output.getvalue(),content_type=content_type)
+    response['Content-Disposition']=f'attachment; filename="dealflow-report.{kind}"'
+    return response

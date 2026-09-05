@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
-from billing.models import Invoice, Payment, Subscription, SubscriptionPlan, CreditNote
+from billing.models import Invoice, Payment, Subscription, SubscriptionPlan, CreditNote, SubscriptionCharge
 from quotations.models import ApprovalLog
 from .proration import _next_cycle_date
 
@@ -32,12 +32,18 @@ def confirm_order(quote, actor=None):
                 raise ValidationError(f'Configure an active subscription plan for {line.product.name}.')
             Subscription.objects.get_or_create(line=line, defaults={
                 'plan': plan, 'quantity': line.qty, 'unit_price': line.net_price,
-                'start_date': today, 'next_billing_date': _next_cycle_date(today, plan.cycle),
+                'start_date': today, 'anchor_day':today.day, 'next_billing_date': _next_cycle_date(today, plan.cycle),
             })
     for kind, amount in totals.items():
+        if amount > Decimal('9999999999.99'):
+            raise ValidationError('Invoice total exceeds the supported amount. Split the quotation.')
         if amount > 0:
-            Invoice.objects.create(quotation=quote, type=kind, amount=amount,
+            invoice = Invoice.objects.create(quotation=quote, type=kind, amount=amount,
                 invoice_number=f'INV-{uuid4().hex[:12].upper()}', status='sent', due_date=today + timedelta(days=30))
+            if kind == 'recurring':
+                Subscription.objects.filter(line__quotation=quote).update(current_invoice=invoice)
+                for sub in Subscription.objects.filter(line__quotation=quote).select_related('line__product'):
+                    SubscriptionCharge.objects.create(subscription=sub, invoice=invoice, period_start=today, amount=sub.line.line_total+sub.line.tax_amount)
     quote.status = 'confirmed'
     quote.save()
     ApprovalLog.objects.create(quotation=quote, actor=actor, action='confirmed', role_required='customer',
@@ -46,10 +52,12 @@ def confirm_order(quote, actor=None):
 
 def invoice_data(invoice):
     paid = invoice.payments.aggregate(total=Sum('amount'))['total'] or Decimal(0)
+    credit = invoice.credits.aggregate(total=Sum('amount'))['total'] or Decimal(0)
+    balance = max(Decimal(0), invoice.amount-paid-credit)
     return {'id': invoice.id, 'invoice_number': invoice.invoice_number, 'quotation': invoice.quotation_id,
             'quote_number': invoice.quotation.quote_number, 'customer': invoice.quotation.customer.name,
             'type': invoice.type, 'amount': str(invoice.amount), 'paid_amount': str(paid),
-            'balance': str(invoice.amount-paid), 'status': invoice.status,
+            'credit_amount':str(credit), 'refund_due':str(max(Decimal(0),paid+credit-invoice.amount)), 'balance': str(balance), 'status': invoice.status,
             'due_date': invoice.due_date, 'currency': 'INR'}
 
 
@@ -75,3 +83,27 @@ def record_payment(invoice, data, actor):
     ApprovalLog.objects.create(quotation=quote, actor=actor, action='payment', role_required=actor.role,
         note=f"Recorded INR {data['amount']} against {invoice.invoice_number}; reference {data['reference']}.")
     return invoice_data(invoice)
+
+
+
+def apply_credit(subscription, amount, reason):
+    # Credits reconcile billed charges for this subscription and period, including
+    # mid-cycle increases. They never silently create a cash refund transaction.
+    remaining = amount
+    charges = subscription.charges.filter(period_start=subscription.start_date).select_related('invoice').order_by('-pk')
+    for charge in charges:
+        used = CreditNote.objects.filter(subscription=subscription,invoice=charge.invoice).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+        available = max(Decimal(0),charge.amount-used)
+        applied = min(remaining,available)
+        if applied <= 0:
+            continue
+        invoice = Invoice.objects.select_for_update().get(pk=charge.invoice_id)
+        CreditNote.objects.create(subscription=subscription,invoice=invoice,amount=applied,reason=reason)
+        if Decimal(invoice_data(invoice)['balance']) == 0:
+            invoice.status = 'paid'
+            invoice.save(update_fields=['status'])
+        remaining -= applied
+        if remaining <= 0:
+            break
+    if remaining > 0:
+        raise ValidationError('Credit exceeds this subscription’s invoiced period. Reconcile charges first.')
