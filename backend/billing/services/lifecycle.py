@@ -27,8 +27,8 @@ def confirm_order(quote, actor=None):
         kind = 'recurring' if line.is_subscription else 'one_time'
         totals[kind] += line.line_total + line.tax_amount
         if line.is_subscription:
-            plan = SubscriptionPlan.objects.filter(product=line.product, is_active=True).first()
-            if not plan:
+            plan = line.subscription_plan or SubscriptionPlan.objects.filter(product=line.product, is_active=True,cycle='monthly').first()
+            if not plan or not plan.is_active:
                 raise ValidationError(f'Configure an active subscription plan for {line.product.name}.')
             Subscription.objects.get_or_create(line=line, defaults={
                 'plan': plan, 'quantity': line.qty, 'unit_price': line.net_price,
@@ -39,7 +39,7 @@ def confirm_order(quote, actor=None):
             raise ValidationError('Invoice total exceeds the supported amount. Split the quotation.')
         if amount > 0:
             invoice = Invoice.objects.create(quotation=quote, type=kind, amount=amount,
-                invoice_number=f'INV-{uuid4().hex[:12].upper()}', status='sent', due_date=today + timedelta(days=30))
+                invoice_number=f'INV-{uuid4().hex[:12].upper()}', status='sent', due_date=today + timedelta(days={'Net 30 Days':30,'Net 60 Days':60,'Due on Receipt':0}.get(quote.payment_terms,30)))
             if kind == 'recurring':
                 Subscription.objects.filter(line__quotation=quote).update(current_invoice=invoice)
                 for sub in Subscription.objects.filter(line__quotation=quote).select_related('line__product'):

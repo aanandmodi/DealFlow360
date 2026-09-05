@@ -53,7 +53,7 @@ class Command(BaseCommand):
 
         portal_url = f'http://localhost:5173/portal/quotation/{token_obj.token}'
 
-        self.stdout.write(self.style.SUCCESS(f'\nPortal Token Generated!'))
+        self.stdout.write(self.style.SUCCESS('\nPortal Token Generated!'))
         self.stdout.write(f'  Quotation: {quotation.quote_number} — {quotation.customer.name}')
         self.stdout.write(f'  Email:     {email}')
         self.stdout.write(f'  Token:     {token_obj.token}')

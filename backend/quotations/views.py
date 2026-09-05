@@ -158,6 +158,18 @@ def quotation_lines(request, pk):
         price = PriceListItem.objects.filter(product=product, price_list__tier=q.customer.tier,
                     price_list__currency='INR', price_list__is_active=True).first()
         unit_price = price.price if price else product.base_price
+        from billing.models import SubscriptionPlan
+        plan = None
+        if product.is_subscription:
+            if data.get('subscription_plan'):
+                plan = get_object_or_404(SubscriptionPlan, pk=serializers.IntegerField(min_value=1).run_validation(data['subscription_plan']), product=product, is_active=True)
+                unit_price = plan.price
+            else:
+                plan = SubscriptionPlan.objects.filter(product=product,is_active=True,cycle='monthly').first()
+                if plan is None:
+                    raise ValidationError('Select an active subscription plan for this product.')
+        elif data.get('subscription_plan'):
+            raise ValidationError('Plans can only be attached to recurring products.')
         variant = get_object_or_404(ProductVariant, pk=data['variant'], product=product) if data.get('variant') else None
         if variant:
             unit_price += variant.extra_price
@@ -168,8 +180,8 @@ def quotation_lines(request, pk):
             qty=qty,
             unit_price=unit_price,
             discount_pct=discount_pct,
-            is_subscription=product.is_subscription, variant=variant,
-            description=f"{variant.attribute}: {variant.value}" if variant else product.description[:300],
+            is_subscription=product.is_subscription, variant=variant, subscription_plan=plan,
+            description=(f'{plan.name} · {plan.cycle}' if plan else f"{variant.attribute}: {variant.value}" if variant else product.description[:300])[:300],
         )
         audit_edit(q, request.user)
         return Response(QuotationLineSerializer(line).data, status=status.HTTP_201_CREATED)

@@ -45,3 +45,9 @@ pgdata/
 .engineering_patch.py
 .runtime_setup.py
 .qa/
+
+.env.*
+!.env.example
+*_dump.json
+*.dump
+*.backup

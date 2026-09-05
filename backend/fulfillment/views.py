@@ -176,7 +176,6 @@ def warehouse_options(request):
 @permission_classes([IsAuthenticated])
 def consolidate(request, quotation_id):
     from fulfillment.models import FulfillmentSplit, StockLevel
-    from django.db.models import F
     from decimal import Decimal
     require_roles(request.user, 'finance', 'sales_manager', 'admin')
     q = quote_for(request, quotation_id, lock=True)

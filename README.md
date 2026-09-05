@@ -1,502 +1,86 @@
 # DealFlow360
 
-**Autonomous Deal Engine for Enterprise Revenue Operations**
+**Quote-to-Cash Deal Engine for Enterprise Sales Operations**
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Django 5.0](https://img.shields.io/badge/django-5.0-green.svg)](https://www.djangoproject.com/)
-[![React 18](https://img.shields.io/badge/react-18.3-61dafb.svg)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/typescript-5.5-3178c6.svg)](https://www.typescriptlang.org/)
-[![PostgreSQL 15](https://img.shields.io/badge/postgresql-15+-336791.svg)](https://www.postgresql.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+Django 5.2 · React 19 · TypeScript 6 · PostgreSQL · Vite 8
 
 ---
 
-## Abstract
+## What It Does
 
-**DealFlow360** is a self-governing revenue operations platform designed to automate and enforce governance across the quote-to-cash lifecycle. It prevents margin slippage through a proprietary **Blended Discount Risk Score** algorithm, balances multi-warehouse fulfillment based on real-time stock levels, unifies one-time hardware purchases and recurring subscription billing on a single order, and replaces slow negotiation emails with an interactive, live **Customer Negotiation Portal** with automated re-approval triggers.
+DealFlow360 manages the full lifecycle of enterprise sales quotations:
 
----
-
-## Key Capabilities
-
-- **Intelligent Discount Governance**: Evaluates quotations using a multi-dimensional blended risk scoring algorithm that detects per-line ceiling breaches and cumulative margin erosion across mixed categories.
-- **Dynamic Multi-Tier Approvals**: Auto-routes deals based on risk profiles: instant auto-approval for low risk, Sales Manager sign-off for medium risk, and dual Sales Manager + Finance Controller approval for high-risk deals.
-- **Enterprise CPQ Quotation Builder**: Real-time margin calculation, live discount constraint feedback, catalog search, and inline summary cards with running totals.
-- **Multi-Warehouse Auto-Split Fulfillment**: Real-time inventory evaluation that intelligently splits orders across fulfillment nodes (e.g., East Coast, West Coast, Backorder) to maximize delivery speed and minimize logistics cost.
-- **Hybrid Billing & Mid-Cycle Proration**: Unifies one-time capital expenditures with monthly/annual SaaS recurring schedules, supporting mid-cycle co-terming and proration.
-- **Interactive Customer Negotiation Portal**: Secure tokenized portal where enterprise clients inspect line items, leave feedback, and counter-propose pricing or quantities. Breaches automatically re-enter the approval pipeline.
-- **Deal Health & Anomaly Analytics**: Pipeline monitoring tracking deal velocity, discount anomalies, approval bottlenecks, and margin health.
+1. **Configure** — sales reps build quotations selecting products, variants, discounts, and recurring subscription plans from a tier-based catalog priced in INR.
+2. **Price** — a blended discount risk score algorithm detects per-line ceiling breaches and weighted margin erosion across mixed categories.
+3. **Approve** — configurable approval chains auto-route deals: low-risk deals approve instantly, medium-risk require Sales Manager review, high-risk require Manager + Finance.
+4. **Negotiate** — customers receive a secure magic-link portal to review terms, leave comments, and counter-propose discounts. Counter-offers that breach ceilings auto-trigger re-approval.
+5. **Fulfill** — a cost-weighted multi-warehouse splitter allocates inventory, creates backorders for shortages, and tracks shipment through delivery.
+6. **Bill** — hybrid invoicing generates one-time invoices for hardware and recurring invoices for subscriptions with proration, cancellation credits, and anchored calendar renewals.
+7. **Pay** — idempotent payment recording with duplicate reference protection and concurrent-safe settlement.
 
 ---
 
-## System Architecture
-
-```mermaid
-graph TB
-    subgraph ClientLayer["🖥️ Frontend Presentation Layer (React 18 + Vite + TypeScript)"]
-        UI_Dash["Dashboard & Pipeline<br/>(Deal Health, KPIs, Recharts)"]
-        UI_CPQ["CPQ Quotation Builder<br/>(Real-time Margins, Inline Validation)"]
-        UI_Appr["Approval Management<br/>(Multi-tier Review Queue & Logs)"]
-        UI_Port["Customer Negotiation Portal<br/>(Live Counter-offers & Sign-off)"]
-        UI_Ops["Fulfillment & Billing Ops<br/>(Warehouse Splits, Invoices)"]
-    end
-
-    subgraph SecurityLayer["🔐 API Gateway & Security Layer"]
-        AuthGW["Django REST Framework API Gateway"]
-        JWT["JWT Authentication & RBAC Engine<br/>(Sales Rep, Sales Manager, Finance, Admin, Customer)"]
-    end
-
-    subgraph ServiceLayer["⚙️ Modular Business Logic Services (Django 5)"]
-        subgraph CoreApp["core Service"]
-            Svc_User["User & RBAC Service"]
-            Svc_Catalog["Product Catalog & Tier Engine"]
-        end
-
-        subgraph QuotationsApp["quotations Service (Core Deal Engine)"]
-            Svc_CPQ["Quotation Lifecycle Manager"]
-            Svc_Risk["Blended Risk Score Calculator"]
-            Svc_Appr["Approval State Machine"]
-        end
-
-        subgraph FulfillmentApp["fulfillment Service"]
-            Svc_WH["Multi-Warehouse Splitter"]
-            Svc_Stock["Stock Level & Backorder Manager"]
-        end
-
-        subgraph BillingApp["billing Service"]
-            Svc_Sub["Hybrid Billing Engine"]
-            Svc_Prorate["Proration & Upsell Heuristics"]
-        end
-
-        subgraph PortalApp["portal Service"]
-            Svc_Negot["Customer Portal & Counter Negotiation"]
-            Svc_Audit["Audit Trail & Activity Logger"]
-        end
-    end
-
-    subgraph DataLayer["💾 Data Persistence Layer"]
-        DB[(PostgreSQL 15 Database)]
-    end
-
-    ClientLayer -->|HTTPS / JSON REST API| AuthGW
-    AuthGW --> JWT
-    JWT --> ServiceLayer
-    ServiceLayer -->|Django ORM Queries| DB
-```
-
----
-
-## End-to-End Product & Deal Flow
-
-The complete journey of an enterprise deal from creation to fulfillment and revenue recognition:
-
-```mermaid
-flowchart TD
-    Start([🚀 Opportunity Identified]) --> Step1[1. Sales Rep Selects Customer & Tier]
-    Step1 --> Step2[2. Configure Quote Items in CPQ Builder]
-    Step2 --> Step3[3. Set Line Quantities & Custom Discounts]
-    
-    Step3 --> RiskCalc{{"⚡ Blended Discount Risk Algorithm"}}
-    RiskCalc -->|Discount ≤ Tier Ceiling| LowRisk["🟢 Low Risk (Score < 30)<br/>Instant / Auto-Approved"]
-    RiskCalc -->|Exceeds Tier Ceiling| MedRisk["🟡 Medium Risk (Score 30-59)<br/>Requires Sales Manager Review"]
-    RiskCalc -->|Severe Breach / Heavy Leakage| HighRisk["🔴 High Risk (Score ≥ 60)<br/>Requires Manager + Finance Review"]
-
-    LowRisk --> ReadyToSend[Quote Approved & Ready]
-    MedRisk --> MgrReview{Sales Manager Review}
-    HighRisk --> MgrReview
-
-    MgrReview -->|Approved| FinCheck{Finance Approval Required?}
-    MgrReview -->|Return for Edit| Step2
-    MgrReview -->|Rejected| DealLost([❌ Deal Rejected])
-
-    FinCheck -->|Yes| FinReview{Finance Director Review}
-    FinCheck -->|No| ReadyToSend
-
-    FinReview -->|Approved| ReadyToSend
-    FinReview -->|Return for Edit| Step2
-    FinReview -->|Rejected| DealLost
-
-    ReadyToSend --> Step4[4. Dispatch Magic Link to Customer Portal]
-    Step4 --> CustomerAction{Customer Action in Portal}
-
-    CustomerAction -->|Accepts Terms| DealWon[5. Customer Digitally Signs Quote]
-    CustomerAction -->|Counter-Offers Discount/Qty| CounterCheck{Counter Breaches Approval Limits?}
-    CustomerAction -->|Declines| DealLost
-
-    CounterCheck -->|Within Allowed Delta| SalesRepAck[Sales Rep Accepts Counter]
-    CounterCheck -->|Exceeds Threshold| ReApprove["🔄 Auto Re-Enter Approval Queue<br/>(Status: under_negotiation)"]
-    ReApprove --> MgrReview
-    SalesRepAck --> DealWon
-
-    DealWon --> SplitEngine{{"📦 Multi-Warehouse Allocation Engine"}}
-    SplitEngine --> AutoSplit[Auto-Split Order Across WH-East / WH-West / Backorder]
-    
-    AutoSplit --> BillingEngine{{"💳 Hybrid Billing Engine"}}
-    BillingEngine --> GenInvoice[Generate One-Time Hardware Invoice]
-    BillingEngine --> GenSub[Initiate Recurring SaaS Subscription & Proration Schedule]
-    
-    GenInvoice & GenSub --> ClosedWon([🎉 Closed-Won: Revenue Recognized])
-```
-
----
-
-## User Flow & Multi-Role Interaction Journey
-
-Demonstrating the collaborative sequence between Sales Rep, Deal Engine, Management, Finance, Customer, and Operations:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Rep as 👤 Sales Rep (Elena)
-    actor App as 💻 DealFlow360 Engine
-    actor Mgr as 👔 Sales Manager (M. Shah)
-    actor Fin as 📊 Finance Director (R. Iyer)
-    actor Cust as 🏢 Enterprise Customer
-    actor Ops as 📦 Fulfillment & Billing
-
-    Rep->>App: 1. Create Quotation for Customer (Gold Tier)
-    Rep->>App: 2. Add Hardware (18% discount) + Enterprise SaaS
-    App-->>Rep: 3. Instant Warning: Hardware discount exceeds 15% ceiling! Risk Score: 68 (HIGH)
-    Rep->>App: 4. Submit quotation with business justification
-    
-    App->>Mgr: 5. Notification: High-Risk Quote queued for review
-    Mgr->>App: 6. Review margin analysis and approve Level-1
-    App->>Fin: 7. Forward to Level-2 Finance queue
-    Fin->>App: 8. Approve Level-2 discount exception
-    
-    App-->>Rep: 9. Status: APPROVED (Approval chain complete)
-    Rep->>App: 10. Generate customer portal magic link
-    App->>Cust: 11. Dispatch invitation with secure access token
-    
-    Cust->>App: 12. Open live portal & review pricing breakdown
-    Cust->>App: 13. Submit counter-proposal (+10 hardware units, extra 2% discount)
-    App-->>Mgr: 14. Evaluate delta -> Threshold exceeded -> Triggers re-approval
-    Mgr->>App: 15. Approve negotiated counter-offer
-    Cust->>App: 16. Accept & digitally sign quotation
-    
-    App->>Ops: 17. Trigger multi-warehouse auto-split (Warehouse East: 70%, Warehouse West: 30%)
-    App->>Ops: 18. Generate invoice & recurring subscription schedule
-    Ops-->>App: 19. Orders dispatched & invoices finalized
-    App-->>Rep: 20. Update Deal Health Dashboard: CLOSED-WON
-```
-
----
-
-## Quotation Lifecycle & Data State Machine
-
-State transitions governed by the core state engine with strict rollback rules:
-
-```mermaid
-stateDiagram-v2
-    [*] --> Draft : Create Quotation
-
-    Draft --> Draft : Add/Edit Lines & Margin Calculations
-    Draft --> PendingApproval : Submit (Discount Ceiling Breached)
-    Draft --> Approved : Submit (Within Tier Ceilings / Score < 30)
-
-    state PendingApproval {
-        [*] --> ManagerReview
-        ManagerReview --> FinanceReview : Manager Approved (Score ≥ 60)
-        ManagerReview --> RejectedState : Manager Rejection
-        ManagerReview --> Draft : Return for Revision
-        FinanceReview --> ApprovedState : Finance Approved
-        FinanceReview --> RejectedState : Finance Rejection
-        FinanceReview --> Draft : Return for Revision
-    }
-
-    PendingApproval --> Approved : All Approvers Signed Off
-    PendingApproval --> Draft : Returned for Revisions
-    PendingApproval --> Rejected : Terminated
-
-    Approved --> SentToCustomer : Generate Customer Portal Link
-    SentToCustomer --> UnderNegotiation : Customer Counter-Offer
-    SentToCustomer --> Accepted : Customer Digital Signature
-    SentToCustomer --> Cancelled : Expired / Customer Declines
-
-    UnderNegotiation --> PendingApproval : Counter Exceeds Threshold (Re-Approval Trigger)
-    UnderNegotiation --> Accepted : Sales Rep & Manager Accept Counter
-    UnderNegotiation --> SentToCustomer : Revised Quote Resubmitted
-
-    Accepted --> FulfillmentAndBilling : Contract Executed
-    
-    state FulfillmentAndBilling {
-        [*] --> WarehouseSplit : Evaluate Inventory Levels
-        WarehouseSplit --> OrdersDispatched : Primary / Secondary Warehouse Split
-        OrdersDispatched --> Invoiced : One-Time Hardware Line Items
-        OrdersDispatched --> SubscriptionActive : Recurring SaaS Proration Schedule
-    }
-
-    FulfillmentAndBilling --> ClosedWon : Fully Dispatched & Invoiced
-    ClosedWon --> [*]
-    Rejected --> [*]
-    Cancelled --> [*]
-```
-
----
-
-## Data Communication & Entity-Relationship Model
-
-```mermaid
-erDiagram
-    USER {
-        uuid id PK
-        string username
-        string email
-        string role "SALES_REP | SALES_MGR | FINANCE | ADMIN"
-        boolean is_active
-    }
-
-    CUSTOMER {
-        uuid id PK
-        string company_name
-        string tier "BRONZE | SILVER | GOLD | PLATINUM"
-        string contact_email
-        decimal credit_limit
-    }
-
-    PRODUCT_CATEGORY {
-        uuid id PK
-        string name "Hardware | Software | Services"
-        string code
-    }
-
-    PRODUCT {
-        uuid id PK
-        uuid category_id FK
-        string sku
-        string name
-        decimal list_price
-        decimal base_cost
-        string billing_type "ONE_TIME | RECURRING"
-        string recurrence "MONTHLY | ANNUAL"
-    }
-
-    DISCOUNT_CEILING_TIER {
-        uuid id PK
-        string customer_tier
-        uuid category_id FK
-        decimal max_rep_discount
-        decimal manager_approval_ceiling
-        decimal finance_approval_ceiling
-    }
-
-    QUOTATION {
-        uuid id PK
-        string quote_number
-        uuid customer_id FK
-        uuid created_by FK
-        string status "DRAFT | PENDING | APPROVED | PORTAL | WON"
-        decimal subtotal
-        decimal total_discount_amount
-        decimal total_amount
-        decimal blended_risk_score
-        string risk_level "LOW | MEDIUM | HIGH"
-        datetime valid_until
-        datetime created_at
-    }
-
-    QUOTATION_LINE {
-        uuid id PK
-        uuid quotation_id FK
-        uuid product_id FK
-        integer quantity
-        decimal unit_price
-        decimal discount_percent
-        decimal line_total
-        decimal margin_percent
-        boolean breaches_ceiling
-    }
-
-    APPROVAL_CHAIN {
-        uuid id PK
-        uuid quotation_id FK
-        integer step_number
-        string required_role "SALES_MGR | FINANCE"
-        uuid assigned_to FK
-        string status "PENDING | APPROVED | REJECTED"
-        datetime acted_at
-    }
-
-    APPROVAL_LOG {
-        uuid id PK
-        uuid quotation_id FK
-        uuid actor_id FK
-        string action "SUBMIT | APPROVE | REJECT | REVISE"
-        text comments
-        datetime timestamp
-    }
-
-    WAREHOUSE {
-        uuid id PK
-        string code "WH-EAST | WH-WEST | WH-CENTRAL"
-        string name
-        string location
-    }
-
-    STOCK_LEVEL {
-        uuid id PK
-        uuid warehouse_id FK
-        uuid product_id FK
-        integer available_qty
-        integer reserved_qty
-    }
-
-    CUSTOMER ||--o{ QUOTATION : "requests"
-    USER ||--o{ QUOTATION : "creates"
-    PRODUCT_CATEGORY ||--o{ PRODUCT : "categorizes"
-    PRODUCT_CATEGORY ||--o{ DISCOUNT_CEILING_TIER : "governs"
-    PRODUCT ||--o{ QUOTATION_LINE : "referenced_in"
-    QUOTATION ||--|{ QUOTATION_LINE : "contains"
-    QUOTATION ||--o{ APPROVAL_CHAIN : "requires"
-    QUOTATION ||--o{ APPROVAL_LOG : "audited_by"
-    USER ||--o{ APPROVAL_LOG : "records"
-    WAREHOUSE ||--o{ STOCK_LEVEL : "stocks"
-    PRODUCT ||--o{ STOCK_LEVEL : "stocked_in"
-```
-
----
-
-## Directory Structure
+## Architecture
 
 ```
 DealFlow360/
-├── backend/
-│   ├── manage.py
-│   ├── requirements.txt
-│   ├── dealflow360/                   # Django project configuration
-│   │   ├── settings.py                # Installed apps, DB, JWT, CORS
-│   │   ├── urls.py                    # Root API router
-│   │   ├── wsgi.py
-│   │   └── asgi.py
-│   ├── core/                          # User Auth, Roles, Products, Customers
-│   │   ├── models.py                  # User, Role, ProductCategory, Product, Customer
-│   │   ├── serializers.py
-│   │   ├── views.py                   # JWT Auth, Catalog endpoints
-│   │   ├── urls.py
-│   │   └── admin.py
-│   ├── quotations/                    # Core Quotation Engine & Risk Scoring
-│   │   ├── models.py                  # Quotation, LineItems, DiscountTiers, ApprovalChain
-│   │   ├── services/
-│   │   │   └── risk_score.py          # Blended Discount Risk Algorithm
-│   │   ├── serializers.py
-│   │   ├── views.py                   # CRUD, Submit, Approve, Reject, Return
-│   │   ├── urls.py
-│   │   ├── admin.py
-│   │   └── management/commands/
-│   │       └── seed_data.py           # Demo users, products, rules seed
-│   ├── fulfillment/                  # Multi-Warehouse Auto-Split & Stock
-│   │   ├── models.py                  # Warehouse, StockLevel, SplitOrder
-│   │   └── ...
-│   ├── billing/                      # Subscriptions, Proration, Upsell
-│   │   ├── models.py                  # SubscriptionPlan, Invoices, Proration
-│   │   └── ...
-│   └── portal/                       # Customer Negotiation Portal
-│       ├── models.py                  # PortalToken, CounterOffers
-│       └── ...
-├── frontend/
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── index.html
-│   └── src/
-│       ├── main.tsx
-│       ├── router.tsx                 # Client routing & protected routes
-│       ├── types.ts                   # Unified TypeScript interfaces
-│       ├── api/                       # API clients with JWT injection
-│       │   ├── client.ts
-│       │   ├── auth.ts
-│       │   └── quotations.ts
-│       ├── lib/                       # Utilities & React Query client
-│       │   ├── utils.ts
-│       │   └── queryClient.ts
-│       ├── styles/
-│       │   └── globals.css            # Dark mode tokens & base styles
-│       └── features/
-│           ├── shell/                 # Navigation, App Shell, Login, Dashboard
-│           ├── pipeline/              # Quotation Pipeline List & Filters
-│           ├── quotation-builder/     # CPQ Builder with live risk & margin cards
-│           ├── approval/              # Approval Review Queue & Detail Page
-│           ├── fulfillment/           # Warehouse Split & Allocation
-│           ├── billing/               # Invoicing & Subscription Schedules
-│           └── portal/                # Customer Negotiation Portal Screen
-├── reference/                         # System diagrams, specifications, progress
-│   ├── CONTEXT.md                     # Platform specification & data models
-│   ├── PROGRESS.md                    # Feature status & changelog
-│   ├── DealFlow360_Architecture.md    # Architectural boundaries
-│   ├── DealFlow360_Product_Flow.svg   # 18-stage Product Flow Vector
-│   └── DealFlow360_Product_Flow.png   # Product Flow Hi-Res Image
-├── docker-compose.yml                 # PostgreSQL 15 service definition
-├── .env.example                       # Environment configuration template
-├── .gitignore
-└── README.md
+├── backend/                      Django 5.2 + DRF + PostgreSQL
+│   ├── core/                     User model (5 roles), RBAC, configuration API, reporting, intelligence
+│   ├── quotations/               Quotation, lines, products, variants, price lists, discount tiers, approval chains
+│   ├── fulfillment/              Warehouses, stock levels, split allocation, backorders, stock receipts
+│   ├── billing/                  Subscription plans, invoices, payments, proration, credit notes, upsell rules
+│   └── portal/                   Portal tokens, negotiation messages, customer portal auth
+├── frontend/                     React 19 + Vite 8 + TypeScript + Tailwind v4
+│   └── src/features/             shell, pipeline, quotation-builder, approval, fulfillment, billing,
+│                                 dashboard, reports, config, portal-negotiation, workspace
+├── docker-compose.yml            PostgreSQL 18 (local development)
+└── .env.example                  Environment variable template
 ```
 
----
+### Django Apps
 
-## Core Algorithm: Blended Discount Risk Score
+| App | Purpose | Key Models |
+|---|---|---|
+| `core` | Auth, RBAC, config CRUD, reporting, deal intelligence | `User`, `ConfigurationAudit` |
+| `quotations` | Deal engine, pricing, approvals | `Customer`, `Product`, `ProductVariant`, `PriceList`, `PriceListItem`, `DiscountTier`, `ApprovalChainRule`, `Quotation`, `QuotationLine`, `ApprovalLog` |
+| `fulfillment` | Warehouse management, stock, shipping | `Warehouse`, `StockLevel`, `FulfillmentSplit`, `StockReceipt` |
+| `billing` | Subscriptions, invoices, payments | `SubscriptionPlan`, `Subscription`, `Invoice`, `Payment`, `CreditNote`, `SubscriptionCharge`, `UpsellRule` |
+| `portal` | Customer-facing negotiation portal | `PortalToken`, `NegotiationMessage` |
 
-The core innovation of DealFlow360 is the **Blended Discount Risk Score**. Rather than relying on simple order-level discount averages, DealFlow360 analyzes individual line items against customer-tier matrices and evaluates cumulative margin slippage:
+### User Roles
 
-### Algorithm Breakdown
-
-1. **Per-Line Ceiling Matrix**:
-   Each product category has an allowable discount limit per customer tier:
-   | Customer Tier | Hardware Max Discount | Software Max Discount | Services Max Discount |
-   |---|---|---|---|
-   | **Platinum** | 20% | 35% | 15% |
-   | **Gold** | 15% | 25% | 10% |
-   | **Silver** | 10% | 20% | 5% |
-   | **Bronze** | 5% | 10% | 0% |
-
-2. **Hard Line Breach Detection**:
-   Any single line exceeding its category ceiling by $> 5\%$ immediately flags the quotation for mandatory Sales Manager approval, regardless of overall deal profitability.
-
-3. **Value-Weighted Margin Leakage**:
-   Calculates the weighted excess discount relative to line item revenue:
-   $$\text{Weighted Leakage} = \sum_{i=1}^N \left( \frac{\text{Line Total}_i}{\text{Quote Total}} \times \max(0, \text{Discount}_i - \text{Ceiling}_i) \right)$$
-
-4. **Composite Risk Classification**:
-   - **Score $0 - 29$ (Low Risk)**: Within permissible bounds. Instant approval.
-   - **Score $30 - 59$ (Medium Risk)**: Requires Level-1 sign-off by **Sales Manager**.
-   - **Score $60 - 100$ (High Risk)**: Requires dual sign-off: Level-1 **Sales Manager** followed by Level-2 **Finance Director**.
+| Role | Access |
+|---|---|
+| `admin` | Full access: configuration, user management, all deals |
+| `sales_manager` | All deals, approvals (level 1), discount/approval rule config |
+| `finance` | All deals, approvals (level 2), payment recording |
+| `sales_rep` | Own deals only, create/edit/submit quotations |
+| `customer` | Portal-only access via magic link tokens |
 
 ---
 
-## Setup & Installation
+## Quick Start
 
-### Prerequisites
-
-- **Python**: 3.11 or higher
-- **Node.js**: 18.x or higher (`npm` 9+)
-- **Docker & Docker Compose** (for PostgreSQL)
-
----
-
-### Step 1: Start PostgreSQL via Docker
+### 1. Start PostgreSQL
 
 ```bash
-# From the repository root
-docker-compose up -d
+# Copy environment template and fill in your values
+cp .env.example .env
+# Edit .env: set POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DEMO_PASSWORD
+
+# Start database
+docker compose up -d
 ```
 
-Verify the database container is healthy:
-```bash
-docker ps
-```
+### 2. Backend
 
----
-
-### Step 2: Backend Setup (Django 5 + DRF)
-
-```bash
+```powershell
 cd backend
 
-# Create and activate virtual environment
+# Create virtual environment
 python -m venv venv
-
-# Windows PowerShell:
-.\venv\Scripts\Activate.ps1
-# macOS / Linux:
-source venv/bin/activate
+.\venv\Scripts\Activate.ps1       # Windows
+# source venv/bin/activate        # macOS/Linux
 
 # Install dependencies
 pip install -r requirements.txt
@@ -504,121 +88,252 @@ pip install -r requirements.txt
 # Apply migrations
 python manage.py migrate
 
-# Seed catalog, discount tiers, and demo users
+# Seed demonstration data (requires DEMO_PASSWORD env var, min 12 chars)
 python manage.py seed_data
 
-# Run Django development server
+# Run development server
 python manage.py runserver
 ```
 
-The backend will be running at `http://localhost:8000/`.
-
----
-
-### Step 3: Frontend Setup (React + Vite + TypeScript)
+### 3. Frontend
 
 ```bash
-cd ../frontend
-
-# Install dependencies
+cd frontend
 npm install
-
-# Start Vite development server
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173/`.
+Open `http://localhost:5173` and log in with one of the seeded accounts using the password you set in `DEMO_PASSWORD`.
 
----
-
-## Seed Accounts & Access Points
-
-| Portal / Screen | URL | Description |
+| Username | Role | Access |
 |---|---|---|
-| **Frontend Web App** | `http://localhost:5173` | Main DealFlow360 Single-Page Application |
-| **Fulfillment & Split (B6)** | `http://localhost:5173/fulfillment` | Multi-warehouse auto-split & backorder management |
-| **Billing & Subscriptions (B7)** | `http://localhost:5173/subscriptions` | Hybrid billing schedule, mid-cycle proration & credit notes |
-| **Backend REST API** | `http://localhost:8000/api/` | DRF browsable API root |
-| **Django Admin Panel** | `http://localhost:8000/admin/` | Direct database administration |
+| `aarav.sharma` | Sales Rep | Own deals, quotation builder |
+| `meera.shah` | Sales Manager | All deals, level-1 approvals |
+| `riya.iyer` | Finance | All deals, level-2 approvals, payments |
+| `aanand.admin` | Admin | Full access, configuration |
 
-### Demo Credentials
-
-| Role | Username | Password | Permissions & Views |
-|---|---|---|---|
-| **Admin** | `admin` | `admin123` | Full superuser access across all apps & admin panel |
-| **Sales Rep** | `elena.vance` | `demo123` | Create quotes, CPQ builder, view pipeline |
-| **Sales Manager** | `m.shah` | `demo123` | Approve/Reject Tier-1 discounts, view team pipeline |
-| **Finance Director** | `r.iyer` | `demo123` | High-risk Tier-2 approval, financial margin audits |
+> **Security note**: The seed command only runs when `DJANGO_DEBUG=True` and requires a `DEMO_PASSWORD` environment variable of at least 12 characters. Demo accounts use this password; they are never created with published default credentials.
 
 ---
 
-## API Documentation
+## Five-Minute Demo Walkthrough
+
+1. **Login** as `aarav.sharma` (Sales Rep) → land on Dashboard
+2. **Create Quote** → select a Gold-tier customer → add "BusinessBook Pro 14" (hardware, ₹84,900) with 22% discount
+3. **Observe risk warning** → discount exceeds the 15% Gold/hardware ceiling → blended risk score rises
+4. **Add subscription** → "CloudSuite Business / seat" auto-selects the monthly plan
+5. **Submit for approval** → status changes to "Pending Approval"
+6. **Switch to `meera.shah`** (Sales Manager) → go to Approvals → review risk breakdown → Approve
+7. **Switch to `riya.iyer`** (Finance) → Approve level 2 → quote becomes "Approved"
+8. **Generate portal link** → copy the magic-link URL → open in an incognito tab
+9. **Customer portal** → review line items → leave a comment → counter-propose 25% discount
+10. **Re-approval triggers** → manager and finance re-approve the negotiated terms
+11. **Customer confirms** → invoices created (one-time hardware + recurring subscription)
+12. **Fulfillment** → accept the auto-split → stock reserved across warehouses, backorder created for shortage
+13. **Payment** → record payments against each invoice → quotation moves to "Paid"
+14. **Reports** → export CSV/XLSX/PDF of deal performance
+
+---
+
+## API Overview
 
 ### Authentication (`/api/auth/`)
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/auth/login/` | Obtain JWT access and refresh token pair | No |
-| `POST` | `/api/auth/refresh/` | Refresh expired access token | No |
-| `GET` | `/api/auth/me/` | Fetch active user profile and role | Yes (JWT) |
-| `GET` | `/api/auth/products/` | Product catalog with base pricing | Yes (JWT) |
-| `GET` | `/api/auth/customers/` | Customer list with tier metadata | Yes (JWT) |
 
-### Quotations & Approvals (`/api/quotations/`)
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `GET` | `/api/quotations/` | List all quotations with risk filters | Yes (JWT) |
-| `POST` | `/api/quotations/` | Create a new quotation draft | Yes (JWT) |
-| `GET` | `/api/quotations/{id}/` | Detailed quotation view with lines & chain | Yes (JWT) |
-| `PATCH` | `/api/quotations/{id}/` | Update quote header (customer, notes) | Yes (JWT) |
-| `POST` | `/api/quotations/{id}/lines/` | Add line item to draft | Yes (JWT) |
-| `PATCH` | `/api/quotations/{id}/lines/{line_id}/` | Update quantity or discount on a line | Yes (JWT) |
-| `DELETE`| `/api/quotations/{id}/lines/{line_id}/` | Remove line item from draft | Yes (JWT) |
-| `POST` | `/api/quotations/{id}/submit/` | Submit quote; runs blended risk algorithm | Yes (JWT) |
-| `POST` | `/api/quotations/{id}/approve/` | Sign off on approval step (Manager / Finance) | Yes (JWT) |
-| `POST` | `/api/quotations/{id}/reject/` | Reject quotation with rejection notes | Yes (JWT) |
-| `POST` | `/api/quotations/{id}/return/` | Return quotation to rep for revision | Yes (JWT) |
-| `GET` | `/api/quotations/{id}/risk-score/` | Diagnostic breakdown of risk metrics | Yes (JWT) |
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/login/` | JWT token pair (throttled) |
+| `POST` | `/api/auth/register/` | Request account (inactive until admin activates) |
+| `POST` | `/api/auth/logout/` | Blacklist refresh token |
+| `GET` | `/api/auth/me/` | Current user profile |
+| `GET` | `/api/auth/users/` | List users (admin/manager/finance) |
 
-### Customer Negotiation Portal (`/api/portal/`) — Built by Person C
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `GET` | `/api/portal/quotations/{token}/` | View quotation details via public magic token | No (Token auth) |
-| `POST` | `/api/portal/quotations/{token}/accept/` | Customer digitally signs & accepts quote | No (Token auth) |
-| `POST` | `/api/portal/quotations/{token}/reject/` | Customer declines quote with feedback | No (Token auth) |
-| `POST` | `/api/portal/quotations/{token}/counter/` | Propose counter-offer (re-triggers approval if limit breached) | No (Token auth) |
-| `GET` | `/api/portal/quotations/{token}/history/` | Full negotiation audit log & event trail | No (Token auth) |
+### Quotations (`/api/quotations/`)
 
-### Deal Health & Pipeline Analytics (`/api/dashboard/` & `/api/quotations/`) — Built by Person C
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `GET` | `/api/quotations/pipeline-summary/` | Aggregate pipeline stages, SLA health, revenue KPIs | Yes (JWT) |
-| `GET` | `/api/dashboard/summary/` | Pipeline health metrics, anomaly counts, win rates, margin % | Yes (JWT) |
-| `GET` | `/api/dashboard/stalled-deals/` | List of inactive or aging deals exceeding SLA thresholds | Yes (JWT) |
-| `GET` | `/api/dashboard/anomalies/` | Outlier quotations with heavy discount breaches | Yes (JWT) |
-| `GET` | `/api/dashboard/slippage/` | Quotations suffering margin erosion | Yes (JWT) |
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET/POST` | `/api/quotations/` | List (scoped by role) / Create draft |
+| `GET/PATCH/DELETE` | `/api/quotations/{id}/` | Detail / Update header / Delete draft |
+| `GET/POST` | `/api/quotations/{id}/lines/` | List / Add line item |
+| `PATCH/DELETE` | `/api/quotations/{id}/lines/{line_id}/` | Update / Remove line |
+| `POST` | `/api/quotations/{id}/submit/` | Submit with risk scoring |
+| `POST` | `/api/quotations/{id}/approve/` | Advance approval chain |
+| `POST` | `/api/quotations/{id}/reject/` | Reject with reason |
+| `POST` | `/api/quotations/{id}/return/` | Return to draft for revision |
+| `POST` | `/api/quotations/{id}/confirm/` | Confirm and create invoices |
+| `GET` | `/api/quotations/{id}/risk-score/` | Risk score breakdown |
+| `GET` | `/api/quotations/{id}/logs/` | Approval audit trail |
+| `POST` | `/api/quotations/{id}/order-discount/` | Apply uniform discount |
+| `GET` | `/api/quotations/pipeline-summary/` | Pipeline KPI aggregates |
 
-### Fulfillment & Multi-Warehouse Auto-Split (`/api/fulfillment/`) — Built by Person B
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/fulfillment/{quotation_id}/suggest-split/` | Runs greedy cost-weighted multi-warehouse allocation preview | Yes (JWT) |
-| `POST` | `/api/fulfillment/{quotation_id}/accept-split/` | Commits warehouse split and reserves inventory across depots | Yes (JWT) |
-| `POST` | `/api/fulfillment/{quotation_id}/override-split/` | Manual allocation override across warehouses and backorders | Yes (JWT) |
+### Intelligence (`/api/quotations/{id}/...`)
 
-### Hybrid Billing, Subscriptions & Upsell (`/api/billing/` & `/api/quotations/`) — Built by Person B
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `GET` | `/api/billing/{quotation_id}/schedule/` | Unified billing schedule partitioning CapEx vs. OpEx | Yes (JWT) |
-| `POST` | `/api/billing/{line_id}/prorate/` | Mid-cycle quantity/plan adjustment with calendar-accurate proration | Yes (JWT) |
-| `POST` | `/api/billing/{line_id}/cancel/` | Subscription cancellation with automatic credit note computation | Yes (JWT) |
-| `GET` | `/api/quotations/{id}/upsell-suggestions/` | **Shared Contract**: Margin-accretive co-purchase recommendations | Yes (JWT) |
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/quotations/{id}/scenarios/` | Pricing scenario comparison (read-only) |
+| `GET` | `/api/quotations/{id}/readiness/` | Deal readiness checks |
+| `GET/POST` | `/api/quotations/{id}/conversation/` | Internal deal conversation |
 
-#### Generate Customer Portal Magic Token (CLI)
+### Fulfillment (`/api/fulfillment/`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/fulfillment/{id}/suggest-split/` | Preview warehouse allocation |
+| `POST` | `/api/fulfillment/{id}/accept-split/` | Commit split and reserve stock |
+| `POST` | `/api/fulfillment/{id}/override-split/` | Manual allocation with validation |
+| `POST` | `/api/fulfillment/{id}/consolidate/` | Fill backorders from new stock |
+| `POST` | `/api/fulfillment/{id}/shipments/{split_id}/` | Ship / deliver split |
+
+### Billing (`/api/billing/`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/billing/{quote_id}/schedule/` | Billing schedule (one-time + recurring) |
+| `POST` | `/api/billing/{line_id}/prorate/` | Mid-cycle quantity change with proration |
+| `POST` | `/api/billing/{line_id}/cancel/` | Cancel subscription with credit note |
+| `GET` | `/api/billing/{line_id}/renew/` | Trigger subscription renewal |
+| `GET` | `/api/quotations/{id}/upsell-suggestions/` | Upsell recommendations |
+
+### Invoices & Payments (`/api/invoices/`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/invoices/` | List all invoices |
+| `GET` | `/api/invoices/{id}/` | Invoice detail with balance |
+| `POST` | `/api/invoices/{id}/payments/` | Record payment (idempotent) |
+
+### Inventory (`/api/inventory/`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/inventory/readiness/` | Replenishment recommendations |
+| `POST` | `/api/inventory/{stock_id}/receive/` | Record stock receipt (duplicate-safe) |
+
+### Portal (`/api/portal/`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/portal/quotations/{token}/` | View quote via magic link |
+| `POST` | `/api/portal/quotations/{id}/comment/` | Customer comment |
+| `POST` | `/api/portal/quotations/{id}/counter-discount/` | Counter-propose discount |
+| `POST` | `/api/portal/quotations/{id}/confirm/` | Customer accept |
+| `POST` | `/api/auth/portal/request-magic-link/` | Generate portal token |
+
+### Configuration (`/api/config/{resource}/`)
+
+CRUD for: `products`, `variants`, `customers`, `discounts`, `approvals`, `warehouses`, `stock`, `plans`, `price-lists`, `prices`, `upsell`, `users`
+
+### Reports (`/api/reports/`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/reports/` | Filtered report data (JSON) |
+| `GET` | `/api/reports/?export=csv` | CSV export (formula-protected) |
+| `GET` | `/api/reports/?export=xlsx` | Excel export (styled) |
+| `GET` | `/api/reports/?export=pdf` | PDF report (landscape A4) |
+| `GET` | `/api/quotations/{id}/pdf/` | Individual quotation PDF |
+
+---
+
+## Testing
+
 ```bash
-python backend/manage.py generate_portal_token <quotation_id>
+cd backend
+python manage.py test core -v 2 --no-input
 ```
+
+### Test Coverage (28 tests)
+
+| Test | What It Verifies |
+|---|---|
+| `test_complete_negotiation_to_cash` | Full lifecycle: submit → approve → portal counter → re-approve → confirm → fulfill → pay |
+| `test_rep_cannot_escalate_or_read_other_deals` | Sales rep isolation (IDOR prevention) |
+| `test_public_portal_cannot_enumerate_or_mutate` | Unauthenticated portal access blocked |
+| `test_token_scope_expiry_and_private_fields` | Token scoping, expiry, cost_price hidden from customer |
+| `test_invalid_inputs_and_immutable_approved_terms` | Input validation, approved quotes are immutable |
+| `test_signup_never_grants_admin` | Registration cannot escalate to admin role |
+| `test_subscription_changes_persist` | Proration, cancellation with credit notes |
+| `test_calendar_boundaries` | Feb 29 → Feb 28, Jan 31 → Feb 28 handling |
+| `test_configuration_validation` | Config API rejects negative prices, unauthorized access |
+| `test_price_tax_and_cost_snapshots` | Line-level snapshots survive catalog changes |
+| `test_backend_sets_catalog_prices_and_variant_validation` | Server-side pricing, variant cross-product blocked |
+| `test_manual_override_and_rollback` | Manual split with atomic rollback on over-allocation |
+| `test_backorder_consolidation_and_dispatch` | Backorder fill, ship, deliver transitions |
+| `test_exports_and_csv_formula_protection` | CSV formula injection protection, XLSX/PDF generation |
+| `test_renewals_are_idempotent_and_calendar_anchored` | Renewal idempotency, anchor-day calendar math |
+| `test_cancellation_credit_reconciles_proration_invoices` | Credits zero out recurring invoice balances |
+| `test_customer_account_cannot_enter_internal_workspace` | Customer role blocked from internal APIs |
+| `test_invoice_payment_requires_finance_and_rejects_overpayment` | Finance-only payments, overpayment rejection |
+| `test_scenarios_match_live_risk_without_changing_terms` | Read-only scenario comparison |
+| `test_readiness_and_idempotent_inventory_receipts` | Deal readiness checks, idempotent stock receipts |
+| `test_admin_creation_and_configuration_audit` | Superuser defaults to admin, audit trail on config changes |
+| `test_finance_cannot_skip_manager_review` | Approval chain ordering enforced |
+| `test_signup_requires_activation_and_login_is_throttled` | Inactive until admin activates, login rate limiting |
+| `test_proration_rejects_future_effective_dates` | Future proration dates rejected |
+| `test_concurrent_inventory_never_over_reserves` | PostgreSQL `SELECT FOR UPDATE` prevents double-reservation |
+| `test_concurrent_duplicate_receipts_are_one_payment` | Concurrent identical payments produce exactly one record |
+| `test_workspace_reads_with_real_lines` | All read endpoints work with real computed data |
+| `test_create_alias_and_header_date_validation` | Create alias endpoint, date validation |
+
+---
+
+## Security
+
+### Implemented Protections
+
+- **JWT**: 15-minute access tokens, 7-day refresh tokens with rotation and blacklisting
+- **RBAC**: 5 roles with server-side enforcement on every endpoint
+- **Ownership boundaries**: Sales reps can only see/modify their own quotations
+- **Portal isolation**: Tokens are scoped to specific quotations, expire, and hide cost data
+- **Throttling**: 20 req/min anonymous, 300 req/min authenticated
+- **Input validation**: Server-side with DRF serializers, database-level constraints
+- **Concurrency**: `SELECT FOR UPDATE` on stock reservation and payment recording
+- **CSV formula injection**: Prefixed with `'` to prevent spreadsheet code execution
+- **Production guards**: Refuses to start without strong `DJANGO_SECRET_KEY`, `POSTGRES_PASSWORD` ≥ 16 chars, `USE_SQLITE=0`
+- **Security headers**: HSTS, X-Frame-Options DENY, Content-Type nosniff, Referrer-Policy no-referrer
+- **Registration**: New accounts are inactive until admin activates them
+
+### Known Limitations
+
+- **Payment recording is simulated**: Payments are recorded manually by the finance role; no real payment gateway integration
+- **Email delivery**: Portal magic links are generated but not emailed; the URL must be copied manually
+- **Single-tenant**: Designed for a single company workspace; no multi-tenancy
+- **No real-time updates**: Frontend polls for data; no WebSocket push notifications
+- **No audit log UI**: Configuration audit records exist in the database but are not surfaced in the frontend
+- **Browser testing**: No automated E2E browser tests (Playwright/Cypress)
+
+---
+
+## Deployment
+
+### Production Requirements
+
+1. **PostgreSQL** — private network, password ≥ 16 characters
+2. **Redis** (optional) — set `REDIS_URL` for shared throttling across workers
+3. **Gunicorn** — `gunicorn dealflow360.wsgi -b 127.0.0.1:8000 -w 4`
+4. **Reverse proxy** (Caddy/Nginx) — TLS termination, set `TRUST_PROXY=1`
+5. **Frontend** — `npm run build` → serve `dist/` as static files
+6. **Environment** — see `.env.example` for all required variables
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | Yes | Long random string (≥50 chars in production) |
+| `DJANGO_DEBUG` | Yes | `False` in production |
+| `POSTGRES_DB` | Yes | Database name |
+| `POSTGRES_USER` | Yes | Database user |
+| `POSTGRES_PASSWORD` | Yes | Database password (≥16 chars in production) |
+| `POSTGRES_HOST` | Yes | Database host |
+| `POSTGRES_PORT` | No | Default: 5432 |
+| `FRONTEND_URL` | Yes | Frontend origin for CORS |
+| `REDIS_URL` | No | Redis URL for distributed throttling |
+| `TRUST_PROXY` | No | Set to `1` behind a reverse proxy |
+| `JWT_ACCESS_TOKEN_LIFETIME_MINUTES` | No | Default: 15 |
+| `JWT_REFRESH_TOKEN_LIFETIME_DAYS` | No | Default: 7 |
+| `DEMO_PASSWORD` | Dev only | Password for seed data accounts (≥12 chars) |
 
 ---
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).

@@ -317,6 +317,58 @@ class DealFlowTests(TestCase):
             self.assertEqual(self.client.get(f'/api/config/{resource}/').status_code, 200, resource)
 
 
+    def test_scenarios_match_live_risk_without_changing_terms(self):
+        self.as_user(self.rep)
+        before = self.quote.updated_at
+        response = self.post(f'/api/quotations/{self.quote.pk}/scenarios/', {'discount': 30})
+        self.assertEqual(response.status_code, 200, response.data)
+        result = response.data['scenarios']
+        self.assertEqual(result[1]['approval'], 'manager_finance')
+        self.assertEqual(result[2]['approval'], 'none')
+        self.line.refresh_from_db()
+        self.quote.refresh_from_db()
+        self.assertEqual(self.line.discount_pct, 25)
+        self.assertEqual(self.quote.updated_at, before)
+        self.as_user(self.other)
+        self.assertEqual(self.post(f'/api/quotations/{self.quote.pk}/scenarios/',{'discount':5}).status_code,404)
+
+    def test_readiness_and_idempotent_inventory_receipts(self):
+        self.as_user(self.rep)
+        response=self.client.get(f'/api/quotations/{self.quote.pk}/readiness/')
+        self.assertEqual(response.status_code,200,response.data)
+        self.assertFalse(next(c for c in response.data['checks'] if c['key']=='stock')['passed'])
+        self.assertEqual(self.client.get('/api/inventory/readiness/').status_code,403)
+        self.as_user(self.manager)
+        stock=StockLevel.objects.get(warehouse=self.w1)
+        url=f'/api/inventory/{stock.pk}/receive/'
+        self.assertEqual(self.post(url,{'quantity':3,'reference':'GRN-TEST-01'}).status_code,201)
+        self.assertEqual(self.post(url,{'quantity':3,'reference':'GRN-TEST-01'}).status_code,200)
+        self.assertEqual(self.post(url,{'quantity':4,'reference':'GRN-TEST-01'}).status_code,400)
+        stock.refresh_from_db()
+        self.assertEqual(stock.in_stock,9)
+        self.assertEqual(stock.receipts.count(),1)
+        self.assertTrue(next(c for c in self.client.get(f'/api/quotations/{self.quote.pk}/readiness/').data['checks'] if c['key']=='stock')['passed'])
+
+    def test_admin_creation_and_configuration_audit(self):
+        user=User.objects.create_superuser('bootstrap',email='admin@example.test',password='Unique-long-passphrase-31')
+        self.assertEqual(user.role,'admin')
+        self.as_user(self.admin)
+        response=self.client.patch(f'/api/config/products/{self.hardware.pk}/',{'name':'Updated workstation'},format='json')
+        self.assertEqual(response.status_code,200,response.data)
+        from core.models import ConfigurationAudit
+        audit=ConfigurationAudit.objects.latest('id')
+        self.assertEqual(audit.actor,self.admin)
+        self.assertEqual(audit.changed_fields,['name'])
+
+    def test_proration_rejects_future_effective_dates(self):
+        self.approve()
+        self.as_user(self.rep)
+        self.post(f'/api/quotations/{self.quote.pk}/confirm/')
+        self.as_user(self.finance)
+        response=self.post(f'/api/billing/{self.subline.pk}/prorate/',{'change_date':str(timezone.localdate()+timedelta(days=1)),'new_quantity':10})
+        self.assertEqual(response.status_code,400,response.data)
+
+
 from django.test import TransactionTestCase, skipUnlessDBFeature
 
 

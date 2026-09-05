@@ -23,7 +23,7 @@ export function ConfigPage() {
   const fields = query.data?.fields || [];
   const rows = (query.data?.results || []).filter(r => Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase()));
   const shown = fields.filter(f => !['description','address','is_subscription'].includes(f.name)).slice(0, 7);
-  return <div className="workspace-page"><PageHead eyebrow="CONTROL CENTRE" title="Built around your business." description="Manage the catalog, pricing guardrails, inventory and recurring plans."/>
+  return <div className="workspace-page"><PageHead eyebrow="CONTROL CENTRE" title="Catalog & rules" description="Manage the catalog, pricing guardrails, inventory and recurring plans."/>
     <div className="config-layout"><nav className="config-nav" aria-label="Configuration areas">{resources.filter(([key])=>key!=='users'||user?.role==='admin').map(([key,name]) => <button key={key} className={resource===key?'active':''} onClick={() => {setResource(key);setForm(null);save.reset();setSearch('');}}>{name}<span>↗</span></button>)}</nav>
     <section className="panel config-content"><div className="panel-head"><div><div className="eyebrow">WORKSPACE CONFIGURATION</div><h2>{resources.find(r=>r[0]===resource)?.[1]}</h2></div>{query.data?.can_write && resource !== 'users' && <button className="btn btn-primary" onClick={() => {save.reset();setForm(Object.fromEntries(fields.filter(f=>!f.readonly).map(f=>[f.name, f.default])));}}><Plus size={16}/>Add record</button>}</div>
     <div className="table-toolbar"><input aria-label="Search records" placeholder="Search records…" value={search} onChange={e=>setSearch(e.target.value)}/><span>{rows.length} records · INR</span></div>

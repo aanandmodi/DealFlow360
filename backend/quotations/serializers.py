@@ -5,7 +5,7 @@ Quotations app serializers — dual-compatible for Person A and Person C fronten
 from rest_framework import serializers
 from .models import (
     Customer, Product, ProductVariant, Quotation, QuotationLine,
-    ApprovalLog, DiscountTier, PriceList, PriceListItem, ApprovalChainRule,
+    ApprovalLog, DiscountTier,
 )
 
 
@@ -24,6 +24,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    subscription_plans = serializers.SerializerMethodField()
     variants = ProductVariantSerializer(many=True, read_only=True)
     category_name = serializers.CharField(source='get_category_display', read_only=True)
     tax_rate = serializers.DecimalField(source='tax_pct', max_digits=5, decimal_places=2, read_only=True)
@@ -31,6 +32,9 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = '__all__'
+
+    def get_subscription_plans(self, obj):
+        return list(obj.subscription_plans.filter(is_active=True).values('id','name','cycle','price'))
 
 
 class QuotationLineSerializer(serializers.ModelSerializer):

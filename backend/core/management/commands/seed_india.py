@@ -1,6 +1,5 @@
 """Add an explicitly fictional Indian demonstration workspace without deleting data."""
 import os
-from decimal import Decimal
 from datetime import timedelta
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -49,6 +48,8 @@ class Command(BaseCommand):
             products.append(product)
             if recurring:
                 SubscriptionPlan.objects.get_or_create(product=product,name=f'{name} Monthly',defaults={'price':price,'cycle':'monthly'})
+                for cycle,multiplier in [('quarterly',3),('yearly',12)]:
+                    SubscriptionPlan.objects.get_or_create(product=product,name=f'{name} {cycle.title()}',defaults={'price':price*multiplier,'cycle':cycle})
         ProductVariant.objects.get_or_create(product=products[0],attribute='Memory',value='32 GB',defaults={'extra_price':8000})
         for tier,ceiling in [('bronze',5),('silver',10),('gold',15)]:
             for category in ['hardware','software','services','subscriptions']:

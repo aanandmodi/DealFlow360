@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import calendar
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 
@@ -84,7 +84,7 @@ def current_period(sub, change_date):
 
 
 def prorate_subscription_change(subscription_line, change_date, new_plan=None, new_quantity=None):
-    from billing.models import CreditNote, Invoice
+    from billing.models import Invoice
     from rest_framework.exceptions import ValidationError
     from uuid import uuid4
     sub = subscription_line
@@ -128,7 +128,6 @@ def prorate_subscription_change(subscription_line, change_date, new_plan=None, n
 
 
 def cancel_subscription(subscription_line, cancel_date):
-    from billing.models import CreditNote
     from django.utils import timezone
     sub = subscription_line
     days, remaining = current_period(sub, cancel_date)

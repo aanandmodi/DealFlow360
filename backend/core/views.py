@@ -1,7 +1,6 @@
 """
 Core views — JWT login/refresh, registration, user info.
 """
-from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -17,7 +16,7 @@ def register_view(request):
     """Register a new internal user."""
     serializer = RegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    user = serializer.save()
+    serializer.save()
     return Response({'message': 'Account requested. A workspace administrator must activate your access before you can sign in.'}, status=201)
 
 

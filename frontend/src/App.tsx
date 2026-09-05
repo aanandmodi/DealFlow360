@@ -13,14 +13,12 @@ import { DealHealthDashboard } from './features/dashboard/DealHealthDashboard';
 import { PortalNegotiationPage } from './features/portal-negotiation/PortalNegotiationPage';
 import { FulfillmentPage } from './features/fulfillment/FulfillmentPage';
 import { BillingPage } from './features/billing/BillingPage';
+import { ReportsPage } from './features/reports/ReportsPage';
+import { CatalogRulesPage } from './features/config/CatalogRulesPage';
 import './index.css';
 import './features/workspace/workspace.css';
-import { Dashboard } from './features/workspace/Dashboard';
-import { DealsPage } from './features/workspace/DealsPage';
-import { ConfigPage } from './features/workspace/ConfigPage';
-import { ReportsPage } from './features/workspace/ReportsPage';
 import { InvoicesPage } from './features/workspace/InvoicesPage';
-import { HealthPage } from './features/workspace/HealthPage';
+import { InventoryPage } from './features/workspace/InventoryPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,14 +85,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <AppShell>
             <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/quotations" element={<DealsPage />} />
-              <Route path="/quotations/list" element={<DealsPage />} />
+              <Route path="/dashboard" element={<SalesDashboard />} />
+              <Route path="/quotations" element={<PipelinePage />} />
+              <Route path="/quotations/list" element={<QuotationListPage />} />
               <Route path="/quotations/new" element={<QuotationBuilderPage />} />
               <Route path="/quotations/:id" element={<QuotationBuilderPage />} />
               <Route path="/approvals" element={
                 <RoleRoute allowedRoles={['sales_manager', 'finance', 'admin']}>
-                  <DealsPage approvals />
+                  <ApprovalListPage />
                 </RoleRoute>
               } />
               <Route path="/approvals/:id" element={
@@ -109,11 +107,12 @@ function AppRoutes() {
               } />
               <Route path="/subscriptions" element={<BillingPage />} />
               <Route path="/invoices" element={<InvoicesPage />} />
-              <Route path="/deal-health" element={<HealthPage />} />
+              <Route path="/inventory" element={<RoleRoute allowedRoles={['admin','sales_manager','finance']}><InventoryPage/></RoleRoute>} />
+              <Route path="/deal-health" element={<DealHealthDashboard />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/config" element={
                 <RoleRoute allowedRoles={['sales_manager', 'admin']}>
-                  <ConfigPage />
+                  <CatalogRulesPage />
                 </RoleRoute>
               } />
               <Route path="/" element={<Navigate to="/dashboard" />} />

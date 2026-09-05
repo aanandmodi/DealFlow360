@@ -4,7 +4,7 @@ Anomaly detection and deal health services.
 Simplified for the 18-hour hackathon build.
 """
 from django.utils import timezone
-from django.db.models import Avg, F, Q
+from django.db.models import Avg
 from datetime import timedelta
 from django.conf import settings
 
@@ -52,7 +52,7 @@ def get_discount_anomalies(threshold_pct=None, user=None):
     Flag discounts that are significantly above a rep's historical average.
     Anomaly = line discount > (rep's avg discount + configurable threshold).
     """
-    from quotations.models import Quotation, QuotationLine
+    from quotations.models import QuotationLine
 
     if threshold_pct is None:
         threshold_pct = getattr(settings, 'DISCOUNT_ANOMALY_THRESHOLD_PCT', 5.0)
@@ -133,8 +133,7 @@ def get_delivery_slippage(user=None):
 
 def get_dashboard_summary(user=None):
     """Aggregate KPI metrics for the Deal Health dashboard."""
-    from quotations.models import Quotation, QuotationLine
-    from django.db.models import Sum, Avg, Count
+    from quotations.models import Quotation
 
     all_quotes = scoped_quotes(user) if user else Quotation.objects.all()
     active_statuses = ['draft', 'pending_approval', 'approved', 'sent', 'under_negotiation']

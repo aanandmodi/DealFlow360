@@ -73,3 +73,14 @@ class FulfillmentSplit(models.Model):
 
     def __str__(self):
         return f"{self.quotation.quote_number} → {self.warehouse.name}: {self.qty}x {self.product.name}"
+
+
+class StockReceipt(models.Model):
+    stock = models.ForeignKey(StockLevel, on_delete=models.PROTECT, related_name='receipts')
+    quantity = models.PositiveIntegerField()
+    reference = models.CharField(max_length=100)
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['stock','reference'],name='unique_stock_receipt_reference')]

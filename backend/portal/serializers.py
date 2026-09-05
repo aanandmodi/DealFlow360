@@ -3,7 +3,6 @@ Portal serializers — portal quotation view, negotiation messages.
 """
 from rest_framework import serializers
 from .models import PortalToken, NegotiationMessage
-from quotations.serializers import QuotationLineSerializer, ApprovalLogSerializer
 
 
 class PortalTokenSerializer(serializers.ModelSerializer):

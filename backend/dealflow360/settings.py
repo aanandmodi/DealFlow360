@@ -6,9 +6,8 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR.parent / '.env')
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-change-me')
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('true', '1', 'yes')
@@ -123,7 +122,7 @@ REST_FRAMEWORK = {
 # Simple JWT
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(
-        minutes=int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', '60'))
+        minutes=int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', '15'))
     ),
     'REFRESH_TOKEN_LIFETIME': timedelta(
         days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '7'))
@@ -171,3 +170,8 @@ if os.getenv('REDIS_URL'):
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': os.environ['REDIS_URL']}}
 CSRF_TRUSTED_ORIGINS = [FRONTEND_URL]
 AUTH_PASSWORD_VALIDATORS[1]['OPTIONS'] = {'min_length': 10}
+
+if not DEBUG and len(os.getenv('POSTGRES_PASSWORD','')) < 16:
+    raise RuntimeError('Production requires a database password of at least 16 characters.')
+if os.getenv('TRUST_PROXY') == '1':
+    REST_FRAMEWORK['NUM_PROXIES'] = 1

@@ -1,10 +1,9 @@
 """Idempotent billing worker; run on a schedule using the management command."""
-from calendar import monthrange
 from decimal import Decimal
 from uuid import uuid4
 from django.db import transaction
 from billing.models import Subscription, Invoice, SubscriptionCharge
-from quotations.models import Quotation, ApprovalLog
+from quotations.models import Quotation
 from .proration import _next_cycle_date
 
 

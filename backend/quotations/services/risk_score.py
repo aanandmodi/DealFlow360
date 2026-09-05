@@ -5,7 +5,7 @@ Blended Discount Risk Score Algorithm & Approval State Engine — Person A.
 from decimal import Decimal
 from typing import NamedTuple, List
 from quotations.models import (
-    DiscountTier, ApprovalChainRule, Quotation, QuotationLine, ApprovalLog,
+    DiscountTier, ApprovalChainRule, Quotation, ApprovalLog,
 )
 
 

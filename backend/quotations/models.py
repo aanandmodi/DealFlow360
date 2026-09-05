@@ -292,6 +292,7 @@ class QuotationLine(models.Model):
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     tax_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     variant = models.ForeignKey(ProductVariant, null=True, blank=True, on_delete=models.PROTECT)
+    subscription_plan = models.ForeignKey('billing.SubscriptionPlan', null=True, blank=True, on_delete=models.PROTECT)
 
     def save(self, *args, **kwargs):
         if self.cost_price is None:
