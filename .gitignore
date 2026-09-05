@@ -1,0 +1,39 @@
+# === Python / Django ===
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+*.sqlite3
+db.sqlite3
+*.log
+media/
+staticfiles/
+
+# === Node / React ===
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === Docker ===
+pgdata/
