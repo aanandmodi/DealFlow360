@@ -44,6 +44,10 @@ def quotation_list(request):
         if customer_id:
             qs = qs.filter(customer_id=customer_id)
 
+        user = request.user
+        if user.is_authenticated and getattr(user, 'role', None) == 'sales_rep' and request.query_params.get('scope') != 'all':
+            qs = qs.filter(rep=user)
+
         serializer = QuotationListSerializer(qs, many=True)
         if request.query_params.get('page') or request.query_params.get('paginated') == 'true':
             return Response({

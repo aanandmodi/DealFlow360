@@ -30,9 +30,9 @@ export function LoginPage() {
   };
 
   const demoAccounts = [
-    { username: 'elena.vance', role: 'Sales Manager', password: 'pass123' },
-    { username: 'marcus.ross', role: 'Sales Rep', password: 'pass123' },
-    { username: 'michael.shah', role: 'Finance', password: 'pass123' },
+    { username: 'elena.vance', role: 'Sales Rep', password: 'demo123' },
+    { username: 'm.shah', role: 'Sales Manager', password: 'demo123' },
+    { username: 'r.iyer', role: 'Finance', password: 'demo123' },
     { username: 'admin', role: 'Admin', password: 'admin123' },
   ];
 

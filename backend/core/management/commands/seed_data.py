@@ -22,37 +22,55 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write('* Seeding DealFlow360 database...\n')
 
+        # Clean existing records for clean idempotent seeding
+        Quotation.objects.all().delete()
+        Customer.objects.all().delete()
+        Product.objects.all().delete()
+        DiscountTier.objects.all().delete()
+        ApprovalChainRule.objects.all().delete()
+        Warehouse.objects.all().delete()
+        SubscriptionPlan.objects.all().delete()
+        User.objects.all().delete()
+
         # -- Users --
         admin = User.objects.create_superuser(
             username='admin', email='admin@dealflow360.com', password='admin123',
             first_name='System', last_name='Admin', role='admin'
         )
+        # Sales Rep demo account (Elena Vance)
+        elena = User.objects.create_user(
+            username='elena.vance', email='elena@dealflow360.com', password='demo123',
+            first_name='Elena', last_name='Vance', role='sales_rep'
+        )
+        # Sales Manager demo account (M. Shah)
         manager = User.objects.create_user(
-            username='elena.vance', email='elena@dealflow360.com', password='pass123',
-            first_name='Elena', last_name='Vance', role='sales_manager'
+            username='m.shah', email='mshah@dealflow360.com', password='demo123',
+            first_name='M.', last_name='Shah', role='sales_manager'
         )
+        # Finance demo account (R. Iyer)
         finance = User.objects.create_user(
-            username='michael.shah', email='michael@dealflow360.com', password='pass123',
-            first_name='Michael', last_name='Shah', role='finance'
+            username='r.iyer', email='riyer@dealflow360.com', password='demo123',
+            first_name='R.', last_name='Iyer', role='finance'
         )
+        # Additional team reps
         rep1 = User.objects.create_user(
-            username='marcus.ross', email='marcus@dealflow360.com', password='pass123',
+            username='marcus.ross', email='marcus@dealflow360.com', password='demo123',
             first_name='Marcus', last_name='Ross', role='sales_rep'
         )
         rep2 = User.objects.create_user(
-            username='sarah.lin', email='sarah@dealflow360.com', password='pass123',
+            username='sarah.lin', email='sarah@dealflow360.com', password='demo123',
             first_name='Sarah', last_name='Lin', role='sales_rep'
         )
         rep3 = User.objects.create_user(
-            username='david.kim', email='david@dealflow360.com', password='pass123',
+            username='david.kim', email='david@dealflow360.com', password='demo123',
             first_name='David', last_name='Kim', role='sales_rep'
         )
         cust_user1 = User.objects.create_user(
-            username='john.reynolds', email='john@acmecorp.com', password='pass123',
+            username='john.reynolds', email='john@acmecorp.com', password='demo123',
             first_name='John', last_name='Reynolds', role='customer'
         )
         cust_user2 = User.objects.create_user(
-            username='lisa.chen', email='lisa@apexglobal.com', password='pass123',
+            username='lisa.chen', email='lisa@apexglobal.com', password='demo123',
             first_name='Lisa', last_name='Chen', role='customer'
         )
         self.stdout.write(self.style.SUCCESS('  [OK] Users created'))

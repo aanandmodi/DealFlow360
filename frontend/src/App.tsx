@@ -37,6 +37,32 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 }
 
+import { ShieldAlert } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+function RoleRoute({ allowedRoles, children }: { allowedRoles: string[]; children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  if (!allowedRoles.includes(user.role)) {
+    return (
+      <div className="p-8 max-w-lg mx-auto mt-16 text-center card">
+        <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-200">
+          <ShieldAlert className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--color-text-primary)' }}>Access Restricted</h2>
+        <p className="text-xs mb-6 text-slate-500">
+          This area requires <strong>{allowedRoles.map(r => r.replace('_', ' ')).join(' or ')}</strong> role.
+          You are currently logged in as <span className="font-semibold text-slate-800">{user.role.replace('_', ' ')}</span> ({user.first_name} {user.last_name}).
+        </p>
+        <Link to="/dashboard" className="btn btn-primary inline-flex items-center gap-2 mx-auto">
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 function PlaceholderPage({ title }: { title: string }) {
   return (
     <div className="p-6">
@@ -74,14 +100,30 @@ function AppRoutes() {
               <Route path="/quotations/list" element={<QuotationListPage />} />
               <Route path="/quotations/new" element={<QuotationBuilderPage />} />
               <Route path="/quotations/:id" element={<QuotationBuilderPage />} />
-              <Route path="/approvals" element={<ApprovalListPage />} />
-              <Route path="/approvals/:id" element={<ApprovalDetailPage />} />
-              <Route path="/fulfillment" element={<FulfillmentPage />} />
+              <Route path="/approvals" element={
+                <RoleRoute allowedRoles={['sales_manager', 'finance', 'admin']}>
+                  <ApprovalListPage />
+                </RoleRoute>
+              } />
+              <Route path="/approvals/:id" element={
+                <RoleRoute allowedRoles={['sales_manager', 'finance', 'admin']}>
+                  <ApprovalDetailPage />
+                </RoleRoute>
+              } />
+              <Route path="/fulfillment" element={
+                <RoleRoute allowedRoles={['sales_manager', 'admin']}>
+                  <FulfillmentPage />
+                </RoleRoute>
+              } />
               <Route path="/subscriptions" element={<BillingPage />} />
               <Route path="/invoices" element={<BillingPage />} />
               <Route path="/deal-health" element={<DealHealthDashboard />} />
               <Route path="/reports" element={<PlaceholderPage title="Reports — Executive Analytics" />} />
-              <Route path="/config" element={<PlaceholderPage title="Products & Config — use /admin/ for Django Admin" />} />
+              <Route path="/config" element={
+                <RoleRoute allowedRoles={['sales_manager', 'admin']}>
+                  <PlaceholderPage title="Products & Config — use /admin/ for Django Admin" />
+                </RoleRoute>
+              } />
               <Route path="/" element={<Navigate to="/dashboard" />} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </Routes>

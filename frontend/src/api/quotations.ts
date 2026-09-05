@@ -139,10 +139,19 @@ export const quotationsApi = {
     if (params?.status) query.set('status', params.status);
     if (params?.rep) query.set('rep', params.rep);
     const qs = query.toString();
-    const res = await ApiClient.get<any>(`/quotations/${qs ? `?${qs}` : ''}`);
-    if (Array.isArray(res)) return res;
-    if (res && Array.isArray(res.results)) return res.results;
-    return [];
+    // Backend returns paginated response; handle both paginated and array
+    const raw = await ApiClient.get<any>(`/quotations/${qs ? `?${qs}` : ''}`);
+    const items = Array.isArray(raw) ? raw : (raw?.results || []);
+    // Transform string decimals to numbers for frontend compatibility
+    return items.map((q: any) => ({
+      ...q,
+      blended_risk_score: parseFloat(q.blended_risk_score) || 0,
+      total_amount: parseFloat(q.total_amount || q.total) || 0,
+      margin_pct: parseFloat(q.margin_pct || q.blended_margin_percent) || 0,
+      quote_number: q.quote_number || `Q-${q.id}`,
+      rep_name: q.rep_name || q.sales_rep_name || 'Unassigned',
+      customer_company: q.customer_company || '',
+    }));
   },
 
   detail: (id: number) => ApiClient.get<Quotation>(`/quotations/${id}/`),
@@ -152,10 +161,24 @@ export const quotationsApi = {
 
   submit: (id: number) => ApiClient.post<Quotation>(`/quotations/${id}/submit/`),
 
-  pipelineSummary: () => ApiClient.get<PipelineSummary>('/quotations/pipeline-summary/'),
+  pipelineSummary: async (): Promise<PipelineSummary> => {
+    // Use the existing dashboard summary endpoint
+    const summary = await ApiClient.get<any>('/dashboard/summary/');
+    return {
+      total_quotations: (summary.active_pipeline_count || 0) + (summary.closed_won_count || 0),
+      active_pipeline_value: summary.active_pipeline_value || 0,
+      active_pipeline_count: summary.active_pipeline_count || 0,
+      pending_approvals: summary.pending_approvals || 0,
+      at_risk_count: summary.at_risk_count || 0,
+      closed_won_value: summary.closed_won_value || 0,
+      closed_won_count: summary.closed_won_count || 0,
+      pipeline_by_status: {},
+    };
+  },
 
   customers: () => ApiClient.get<Customer[]>('/customers/'),
 
   products: (category?: string) =>
     ApiClient.get<Product[]>(`/products/${category ? `?category=${category}` : ''}`),
 };
+
