@@ -6,7 +6,7 @@ Populates the database with realistic demo data for the DealFlow360 hackathon de
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from core.models import ProductCategory, Product, Customer
-from quotations.models import DiscountTier, CategoryDiscountCeiling, ApprovalChain
+from quotations.models import DiscountTier, CategoryDiscountCeiling, ApprovalChain, Quotation, QuotationLine, ApprovalLog
 from fulfillment.models import Warehouse, StockLevel
 from billing.models import SubscriptionPlan, UpsellRule
 
@@ -261,6 +261,93 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(self.style.SUCCESS('  [OK] Upsell rules created'))
+
+        # === Sample Quotations for Live Demo ===
+        # Q1: Acme Corp — High Risk (Manager + Finance)
+        q1, created = Quotation.objects.get_or_create(
+            customer=acme,
+            sales_rep=elena,
+            status=Quotation.Status.PENDING_APPROVAL,
+            defaults={
+                'blended_risk_score': 72.50,
+                'required_approval_level': Quotation.ApprovalLevel.MANAGER_FINANCE,
+                'notes': 'Enterprise quarterly rollout. Competing against Dell; requested aggressive hardware concession.',
+                'payment_terms': 'Net 30 Days',
+            }
+        )
+        if created:
+            QuotationLine.objects.create(quotation=q1, product=laptop, quantity=25, unit_price=laptop.base_price, discount_percent=18.0)
+            QuotationLine.objects.create(quotation=q1, product=mouse, quantity=25, unit_price=mouse.base_price, discount_percent=15.0)
+            QuotationLine.objects.create(quotation=q1, product=care_plan, quantity=25, unit_price=care_plan.base_price, discount_percent=10.0)
+            ApprovalLog.objects.create(
+                quotation=q1, actor=elena, action=ApprovalLog.Action.SUBMITTED,
+                role_at_action='sales_rep',
+                reason='Submitted for executive approval: Hardware discount exceeds 15% ceiling for Gold Tier.',
+                blended_risk_score_at_action=72.50,
+            )
+
+        # Q2: Delta Industries — Medium Risk (Manager Only)
+        q2, created = Quotation.objects.get_or_create(
+            customer=delta,
+            sales_rep=elena,
+            status=Quotation.Status.PENDING_APPROVAL,
+            defaults={
+                'blended_risk_score': 42.00,
+                'required_approval_level': Quotation.ApprovalLevel.MANAGER,
+                'notes': 'Datacenter capacity expansion. Moderate discount requested.',
+                'payment_terms': 'Net 45 Days',
+            }
+        )
+        if created:
+            QuotationLine.objects.create(quotation=q2, product=server, quantity=4, unit_price=server.base_price, discount_percent=12.0)
+            QuotationLine.objects.create(quotation=q2, product=ext_warranty, quantity=4, unit_price=ext_warranty.base_price, discount_percent=8.0)
+            ApprovalLog.objects.create(
+                quotation=q2, actor=elena, action=ApprovalLog.Action.SUBMITTED,
+                role_at_action='sales_rep',
+                reason='Submitted: Server hardware exceeds 10% ceiling for Silver Tier.',
+                blended_risk_score_at_action=42.00,
+            )
+
+        # Q3: Vanguard FinTech — Approved (Low Risk)
+        q3, created = Quotation.objects.get_or_create(
+            customer=vanguard,
+            sales_rep=elena,
+            status=Quotation.Status.APPROVED,
+            defaults={
+                'blended_risk_score': 15.00,
+                'required_approval_level': Quotation.ApprovalLevel.NONE,
+                'manager_approved': True,
+                'notes': 'Standard workstation bundle — within standard rep discretion.',
+                'payment_terms': 'Net 30 Days',
+            }
+        )
+        if created:
+            QuotationLine.objects.create(quotation=q3, product=laptop, quantity=10, unit_price=laptop.base_price, discount_percent=10.0)
+            QuotationLine.objects.create(quotation=q3, product=dock, quantity=10, unit_price=dock.base_price, discount_percent=10.0)
+            ApprovalLog.objects.create(
+                quotation=q3, actor=elena, action=ApprovalLog.Action.SUBMITTED,
+                role_at_action='sales_rep',
+                reason='Auto-approved: Within Gold Tier ceilings.',
+                blended_risk_score_at_action=15.00,
+            )
+
+        # Q4: Zenith Co — Draft in progress
+        q4, created = Quotation.objects.get_or_create(
+            customer=zenith,
+            sales_rep=elena,
+            status=Quotation.Status.DRAFT,
+            defaults={
+                'blended_risk_score': 0.00,
+                'required_approval_level': Quotation.ApprovalLevel.NONE,
+                'notes': 'Draft proposal for pilot rollout.',
+                'payment_terms': 'Net 30 Days',
+            }
+        )
+        if created:
+            QuotationLine.objects.create(quotation=q4, product=laptop, quantity=5, unit_price=laptop.base_price, discount_percent=5.0)
+            QuotationLine.objects.create(quotation=q4, product=setup, quantity=1, unit_price=setup.base_price, discount_percent=0.0)
+
+        self.stdout.write(self.style.SUCCESS('  [OK] Sample quotations & logs created'))
 
         self.stdout.write(self.style.SUCCESS('\n[SUCCESS] Seed data loaded successfully!'))
         self.stdout.write('\nDemo accounts:')
