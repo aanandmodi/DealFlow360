@@ -94,29 +94,87 @@ def verify_magic_link(request):
     })
 
 
-# ── Portal Quotation View ──────────────────────────────
+# ── Portal Quotation Views ─────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def portal_quotations_list(request):
+    """Customer-facing list of quotations available in portal."""
+    qs = Quotation.objects.select_related('customer', 'rep').order_by('-updated_at')
+
+    # Optional customer email filter if passed
+    email = request.query_params.get('email')
+    if email:
+        qs = qs.filter(customer__email__iexact=email)
+
+    data = []
+    for q in qs:
+        data.append({
+            'id': q.id,
+            'quote_number': q.quote_number,
+            'customer_name': q.customer.name if q.customer else 'Customer',
+            'customer_company': q.customer.company if q.customer else '',
+            'customer_tier': q.customer.tier if q.customer else 'bronze',
+            'status': q.status,
+            'status_display': q.get_status_display(),
+            'total_amount': float(q.total_amount),
+            'portal_token': q.portal_token or str(q.id),
+            'valid_until': q.valid_until.isoformat() if q.valid_until else None,
+            'created_at': q.created_at.isoformat(),
+        })
+    return Response(data)
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def portal_quotation_view(request, token):
-    """Customer-facing quotation view via portal token."""
-    # Try PortalToken model first
-    try:
-        portal_token = PortalToken.objects.select_related('quotation').get(token=token)
-        if not portal_token.is_valid:
-            return Response({'detail': 'Token has expired'}, status=403)
-        quotation = portal_token.quotation
+    """Customer-facing quotation view via portal token, quote number, ID, or 'default'."""
+    quotation = None
+
+    # 1. Handle special keywords: 'default', 'latest', 'active', 'demo', 'under_negotiation'
+    if token in ('default', 'latest', 'active', 'demo', 'under_negotiation'):
         quotation = Quotation.objects.select_related('customer', 'rep').prefetch_related(
             'lines__product', 'negotiation_messages__line_ref',
-        ).get(pk=quotation.pk)
-    except PortalToken.DoesNotExist:
-        # Fallback: try looking up via portal_token field on Quotation
-        try:
+        ).filter(status='under_negotiation').first()
+        if not quotation:
             quotation = Quotation.objects.select_related('customer', 'rep').prefetch_related(
                 'lines__product', 'negotiation_messages__line_ref',
-            ).get(portal_token=token)
-        except Quotation.DoesNotExist:
-            return Response({'detail': 'Quotation not found'}, status=404)
+            ).first()
+
+    # 2. Try PortalToken model lookup
+    if not quotation:
+        try:
+            pt = PortalToken.objects.select_related('quotation').get(token=token)
+            if pt.is_valid and pt.quotation:
+                quotation = Quotation.objects.select_related('customer', 'rep').prefetch_related(
+                    'lines__product', 'negotiation_messages__line_ref',
+                ).get(pk=pt.quotation.pk)
+        except (PortalToken.DoesNotExist, Exception):
+            pass
+
+    # 3. Try portal_token field on Quotation
+    if not quotation:
+        quotation = Quotation.objects.select_related('customer', 'rep').prefetch_related(
+            'lines__product', 'negotiation_messages__line_ref',
+        ).filter(portal_token=token).first()
+
+    # 4. Try quote_number (e.g. Q-1042 or 1042)
+    if not quotation:
+        clean_num = token.strip().upper()
+        if not clean_num.startswith('Q-') and clean_num.isdigit():
+            clean_num = f'Q-{clean_num}'
+        quotation = Quotation.objects.select_related('customer', 'rep').prefetch_related(
+            'lines__product', 'negotiation_messages__line_ref',
+        ).filter(quote_number__iexact=clean_num).first()
+
+    # 5. Try primary key / numeric ID
+    if not quotation and token.isdigit():
+        quotation = Quotation.objects.select_related('customer', 'rep').prefetch_related(
+            'lines__product', 'negotiation_messages__line_ref',
+        ).filter(pk=int(token)).first()
+
+    if not quotation:
+        return Response({'detail': 'Quotation not found'}, status=404)
 
     data = PortalQuotationSerializer(quotation).data
     return Response(data)

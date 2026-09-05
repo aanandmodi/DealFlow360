@@ -40,6 +40,20 @@ export interface PortalQuotation {
   created_at: string;
 }
 
+export interface PortalQuotationSummary {
+  id: number;
+  quote_number: string;
+  customer_name: string;
+  customer_company: string;
+  customer_tier: string;
+  status: string;
+  status_display: string;
+  total_amount: number;
+  portal_token: string;
+  valid_until: string | null;
+  created_at: string;
+}
+
 export const portalApi = {
   requestMagicLink: (email: string, quotation_id?: number) =>
     ApiClient.post<{ token: string; link: string; expires_at: string }>(
@@ -52,6 +66,9 @@ export const portalApi = {
       '/auth/portal/verify/',
       { token }
     ),
+
+  listQuotations: (email?: string) =>
+    ApiClient.get<PortalQuotationSummary[]>(`/portal/quotations/${email ? `?email=${encodeURIComponent(email)}` : ''}`),
 
   getQuotation: (token: string) =>
     ApiClient.get<PortalQuotation>(`/portal/quotations/${token}/`),

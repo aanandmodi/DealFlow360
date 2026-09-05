@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { fetchQuotations } from '../../api/quotations';
 import { formatCurrency, formatDate, getStatusBadgeClass } from '../../lib/utils';
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
 export function QuotationListPage() {
@@ -101,12 +101,23 @@ export function QuotationListPage() {
                 </td>
                 <td className="px-4 py-2.5 text-sm text-[var(--color-text-muted)]">{formatDate(q.created_at)}</td>
                 <td className="px-4 py-2.5 text-center">
-                  <Link
-                    to={q.status === 'pending_approval' ? `/approvals/${q.id}` : `/quotations/${q.id}`}
-                    className="px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] border border-[var(--color-primary)] rounded hover:bg-[var(--color-primary-light)] transition"
-                  >
-                    {q.status === 'pending_approval' ? 'Review' : 'Open'}
-                  </Link>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Link
+                      to={q.status === 'pending_approval' ? `/approvals/${q.id}` : `/quotations/${q.id}`}
+                      className="px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] border border-[var(--color-primary)] rounded hover:bg-[var(--color-primary-light)] transition"
+                    >
+                      {q.status === 'pending_approval' ? 'Review' : 'Open'}
+                    </Link>
+                    <a
+                      href={`/portal/quotations/${(q as any).portal_token || q.quote_number || q.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open in Customer Portal"
+                      className="p-1 text-slate-500 hover:text-blue-600 border border-slate-200 rounded hover:bg-slate-50 transition"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </td>
               </tr>
             ))}

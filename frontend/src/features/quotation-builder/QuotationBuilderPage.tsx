@@ -170,10 +170,16 @@ export function QuotationBuilderPage() {
               </button>
             </>
           )}
-          {quotation?.status === 'approved' && (
-            <button className="flex items-center gap-1.5 px-4 h-9 bg-[var(--color-emerald)] hover:bg-[#047857] text-white font-semibold rounded transition">
-              <Eye className="w-4 h-4" /> Preview as Customer
-            </button>
+          {quotation && (
+            <a
+              href={`/portal/quotations/${(quotation as any).portal_token || quotation.quote_number || quotation.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 h-9 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-semibold rounded transition text-xs"
+              title="Open customer-facing portal view for this deal"
+            >
+              <Eye className="w-3.5 h-3.5" /> Customer Portal
+            </a>
           )}
         </div>
       </div>

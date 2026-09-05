@@ -8,7 +8,7 @@ import { quotationsApi, QuotationListItem, PipelineSummary } from '../../api/quo
 import { formatCurrency, getStatusBadgeClass, getStatusLabel, timeAgo, cn } from '../../lib/utils';
 import {
   Plus, Search, LayoutGrid, Table, Filter, Clock, AlertTriangle,
-  TrendingUp, Target, RefreshCw, Download, Sparkles
+  TrendingUp, Target, RefreshCw, Download, Sparkles, ExternalLink
 } from 'lucide-react';
 
 const kanbanColumns = [
@@ -363,8 +363,22 @@ function QuotationCard({ quotation: q, onClick }: { quotation: QuotationListItem
             {q.rep_name}
           </span>
         </div>
-        <div className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--color-text-disabled)' }}>
-          <Clock className="w-3 h-3" /> {timeAgo(q.updated_at)}
+        <div className="flex items-center gap-2">
+          {q.status === 'under_negotiation' && (
+            <a
+              href={`/portal/quotations/${(q as any).portal_token || q.quote_number || q.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200"
+              title="Open Customer Portal Negotiation"
+            >
+              Portal <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          )}
+          <div className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--color-text-disabled)' }}>
+            <Clock className="w-3 h-3" /> {timeAgo(q.updated_at)}
+          </div>
         </div>
       </div>
     </div>

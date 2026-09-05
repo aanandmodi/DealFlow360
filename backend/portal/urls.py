@@ -7,6 +7,7 @@ urlpatterns = [
     path('auth/portal/verify/', views.verify_magic_link, name='portal-verify'),
 
     # Portal quotation (customer-facing)
+    path('portal/quotations/', views.portal_quotations_list, name='portal-quotations-list'),
     path('portal/quotations/<str:token>/', views.portal_quotation_view, name='portal-quotation'),
     path('portal/quotations/<int:pk>/comment/', views.portal_comment, name='portal-comment'),
     path('portal/quotations/<int:pk>/counter-discount/', views.portal_counter_discount, name='portal-counter-discount'),

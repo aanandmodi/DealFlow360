@@ -71,6 +71,9 @@ export interface ApprovalLog {
 
 export interface Quotation {
   id: number;
+  quote_number?: string;
+  portal_token?: string;
+  valid_until?: string;
   customer: number;
   customer_name: string;
   customer_tier: string;
@@ -174,6 +177,7 @@ export interface QuotationListItem {
   rep_name: string;
   status: string;
   blended_risk_score: number;
+  portal_token?: string;
   total_amount: number;
   margin_pct: number;
   line_count: number;

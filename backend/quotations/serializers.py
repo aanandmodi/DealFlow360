@@ -150,6 +150,7 @@ class QuotationListSerializer(serializers.ModelSerializer):
             'id', 'quote_number', 'customer', 'customer_name', 'customer_tier',
             'customer_company', 'rep', 'rep_name', 'sales_rep_name',
             'status', 'status_display', 'blended_risk_score',
+            'portal_token',
             'total', 'total_amount', 'margin_pct', 'line_count',
             'created_at', 'updated_at',
         ]
