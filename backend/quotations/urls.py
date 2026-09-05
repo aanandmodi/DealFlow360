@@ -23,6 +23,8 @@ urlpatterns = [
     # Catalogs & Config
     path('quotations/discount-tiers/', views.discount_tiers_list, name='quotation-discount-tiers'),
     path('quotations/pipeline-summary/', views.pipeline_summary, name='pipeline-summary'),
+    path('quotations/<int:pk>/order-discount/', views.order_discount, name='quotation-order-discount'),
     path('customers/', views.customer_list, name='customer-list'),
     path('products/', views.product_list, name='product-list'),
 ]
+

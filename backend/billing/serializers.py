@@ -38,7 +38,7 @@ class ProrateRequestSerializer(serializers.Serializer):
     """Input for proration calculation."""
     change_date = serializers.DateField()
     new_plan_id = serializers.IntegerField(required=False)
-    new_quantity = serializers.IntegerField(required=False)
+    new_quantity = serializers.IntegerField(required=False, min_value=1, max_value=99999999)
 
 
 class ProrationResponseSerializer(serializers.Serializer):

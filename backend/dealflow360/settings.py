@@ -6,9 +6,12 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env from both project root and backend directory
+load_dotenv(BASE_DIR.parent / '.env')
+load_dotenv(BASE_DIR / '.env')
+load_dotenv()
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-change-me')
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
@@ -25,6 +28,7 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     # Project apps
     'core',
@@ -43,6 +47,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.PrivateAPIHeaders',
 ]
 
 ROOT_URLCONF = 'dealflow360.urls'
@@ -77,23 +82,37 @@ if USE_SQLITE in ('1', 'true', 'yes', 'sqlite'):
     }
 else:
     import socket
-    pg_host = os.getenv('DB_HOST', 'localhost')
-    pg_port = int(os.getenv('DB_PORT', '5432'))
+    pg_host = os.getenv('POSTGRES_HOST', os.getenv('DB_HOST', 'localhost'))
+    pg_port = int(os.getenv('POSTGRES_PORT', os.getenv('DB_PORT', '5432')))
+    pg_db = os.getenv('POSTGRES_DB', os.getenv('DB_NAME', 'dealflow360'))
+    pg_user = os.getenv('POSTGRES_USER', os.getenv('DB_USER', 'dealflow360'))
+    pg_password = os.getenv('POSTGRES_PASSWORD', os.getenv('DB_PASSWORD', 'dealflow360pass'))
+
     pg_available = False
     try:
         sock = socket.create_connection((pg_host, pg_port), timeout=1)
         sock.close()
+        import psycopg2
+        test_conn = psycopg2.connect(
+            dbname=pg_db,
+            user=pg_user,
+            password=pg_password,
+            host=pg_host,
+            port=pg_port,
+            connect_timeout=2,
+        )
+        test_conn.close()
         pg_available = True
-    except OSError:
+    except Exception:
         pg_available = False
 
     if pg_available:
         DATABASES = {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
-                'NAME': os.getenv('DB_NAME', 'dealflow360'),
-                'USER': os.getenv('DB_USER', 'dealflow360'),
-                'PASSWORD': os.getenv('DB_PASSWORD', 'dealflow360_secret'),
+                'NAME': pg_db,
+                'USER': pg_user,
+                'PASSWORD': pg_password,
                 'HOST': pg_host,
                 'PORT': str(pg_port),
             }
@@ -132,13 +151,21 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_RATES': {
+        'authentication': '10/min',
+    },
+}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
 }
 
 # Simple JWT
@@ -155,8 +182,9 @@ SIMPLE_JWT = {
 }
 
 # CORS
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 CORS_ALLOWED_ORIGINS = [
-    os.getenv('FRONTEND_URL', 'http://localhost:5173'),
+    FRONTEND_URL,
 ]
 CORS_ALLOW_CREDENTIALS = True
 

@@ -4,10 +4,12 @@ Person C owns this app.
 """
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from .managers import UserManager
 
 
 class User(AbstractUser):
     """Custom User model with role field for RBAC."""
+    objects = UserManager()
 
     class Role(models.TextChoices):
         ADMIN = 'admin', 'Admin'
@@ -39,3 +41,15 @@ class User(AbstractUser):
     @property
     def is_manager_or_above(self):
         return self.role in (self.Role.SALES_MANAGER, self.Role.FINANCE, self.Role.ADMIN)
+
+
+class ConfigurationAudit(models.Model):
+    actor = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
+    resource = models.CharField(max_length=40)
+    record_id = models.PositiveBigIntegerField()
+    action = models.CharField(max_length=10)
+    changed_fields = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']

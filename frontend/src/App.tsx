@@ -13,6 +13,8 @@ import { DealHealthDashboard } from './features/dashboard/DealHealthDashboard';
 import { PortalNegotiationPage } from './features/portal-negotiation/PortalNegotiationPage';
 import { FulfillmentPage } from './features/fulfillment/FulfillmentPage';
 import { BillingPage } from './features/billing/BillingPage';
+import { ReportsPage } from './features/reports/ReportsPage';
+import { CatalogRulesPage } from './features/config/CatalogRulesPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -118,10 +120,10 @@ function AppRoutes() {
               <Route path="/subscriptions" element={<BillingPage />} />
               <Route path="/invoices" element={<BillingPage />} />
               <Route path="/deal-health" element={<DealHealthDashboard />} />
-              <Route path="/reports" element={<PlaceholderPage title="Reports — Executive Analytics" />} />
+              <Route path="/reports" element={<ReportsPage />} />
               <Route path="/config" element={
                 <RoleRoute allowedRoles={['sales_manager', 'admin']}>
-                  <PlaceholderPage title="Products & Config — use /admin/ for Django Admin" />
+                  <CatalogRulesPage />
                 </RoleRoute>
               } />
               <Route path="/" element={<Navigate to="/dashboard" />} />

@@ -1,22 +1,33 @@
 /**
  * Sales Dashboard — Dynamic Role-Based Revenue Operations Hub.
- * Tailors KPIs, action buttons, table queues, and analytic widgets per persona:
- * - Sales Rep: Quota target tracking, personal pipeline, approval status, rapid quotation builder.
- * - Sales Manager: Urgent deal desk approvals, team leaderboard, autonomous clearance radar, escalations.
- * - Finance: High-risk discount sign-off, ARR/MRR subscriptions, margin leakage protection, billing cashflow.
- * - Admin: Full enterprise command center with SOC2/SLA metrics and direct admin controls.
+ * Styled in the exact visual design system of VendorBridge:
+ * - Outfit & Inter typography
+ * - Welcome hero gradient with dynamic action buttons
+ * - Alert banner with pulse icon
+ * - Premium KPI cards with colored icon chips and Outfit bold figures
+ * - Recharts area chart with #2563EB gradient fill
+ * - Sleek tabular queue with shadow-premium
+ * - Timeline audit feed
  */
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { dashboardApi, DashboardSummary, StalledDeal, DiscountAnomaly } from '../../api/dashboard';
 import { quotationsApi, QuotationListItem } from '../../api/quotations';
 import { formatCurrency, getStatusBadgeClass, getStatusLabel, timeAgo } from '../../lib/utils';
 import {
   CheckSquare, FileText, AlertTriangle, Percent, Download, Eye,
-  ShieldCheck, Plus, ArrowRight, TrendingUp, Clock, RefreshCw, Home, AlertCircle,
-  Award, Target, DollarSign, CreditCard, ShieldAlert, Sparkles, UserCheck, Activity
+  ShieldCheck, Plus, ArrowRight, TrendingUp, Clock, RefreshCw, AlertCircle,
+  Award, Target, DollarSign, CreditCard, Sparkles, Activity, CheckCircle,
+  PlusCircle, Send, Users
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  Tooltip
+} from 'recharts';
 
 export function SalesDashboard() {
   const { user } = useAuth();
@@ -56,7 +67,7 @@ export function SalesDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <RefreshCw className="w-6 h-6 animate-spin" style={{ color: '#2563EB' }} />
+        <RefreshCw className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -73,581 +84,456 @@ export function SalesDashboard() {
   const quotaTarget = 500000;
   const quotaAttainment = Math.min(100, Math.round((myPipelineValue / quotaTarget) * 100)) || 62;
 
+  // Recharts Monthly Revenue Trend (matching VendorBridge spend trend)
+  const revenueTrendData = [
+    { name: 'Jan', revenue: 140000 },
+    { name: 'Feb', revenue: 260000 },
+    { name: 'Mar', revenue: 210000 },
+    { name: 'Apr', revenue: 390000 },
+    { name: 'May', revenue: 320000 },
+    { name: 'Jun', revenue: myPipelineValue || 680000 },
+  ];
+
+  const showAnomalyAlert = anomalies.length > 0 || stalled.length > 0;
+
   return (
-    <div className="p-6 animate-fade-in">
-      {/* ── Role-Specific Header ── */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px]" style={{ color: 'var(--color-text-caption)' }}>
-              {role === 'sales_rep' && 'Sales Executive Workspace'}
-              {role === 'sales_manager' && 'Deal Desk & Manager Command'}
-              {role === 'finance' && 'Revenue & Finance Control Hub'}
-              {role === 'admin' && 'Enterprise Revenue Operations'}
-            </span>
-            <span className="text-[10px] font-semibold" style={{ color: '#10B981' }}>• Realtime Sync Active</span>
+    <div className="space-y-8 animate-fade-in">
+      {/* ── Smart Anomaly Alert Card (VendorBridge style) ── */}
+      {showAnomalyAlert && (
+        <div className="rounded-2xl border border-warning/30 bg-warning/5 p-5 shadow-premium hover:shadow-premium-hover transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start space-x-3.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning-light text-warning">
+              <AlertTriangle className="h-5 w-5 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-900 font-outfit uppercase tracking-wider">
+                Deal Risk & Margin Anomaly Detected
+              </h4>
+              <p className="text-xs text-slate-600 mt-1 font-semibold">
+                {anomalies[0]?.issue || `${stalled.length} high-value deals are stalled beyond SLA threshold (14+ days idle).`}
+              </p>
+            </div>
           </div>
-
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
-            {role === 'sales_rep' && `Welcome back, ${user?.first_name || 'Elena'}!`}
-            {role === 'sales_manager' && 'Sales Operations Hub'}
-            {role === 'finance' && 'Revenue & Margin Governance Hub'}
-            {role === 'admin' && 'Executive Operations Hub'}
-          </h1>
-
-          <div className="mt-1 flex items-center gap-2">
-            <span className="badge badge-info" style={{ fontSize: 10 }}>
-              {role === 'sales_rep' && `Q1 Quota Target: ${formatCurrency(quotaTarget)}`}
-              {role === 'sales_manager' && 'Governance Active • 4 Reps Overseen'}
-              {role === 'finance' && 'Billing Period: Q1-FY25 • Margin Floor: 25%'}
-              {role === 'admin' && 'Enterprise 360 Admin Mode'}
-            </span>
-            <span className="text-xs text-slate-500 font-medium">
-              Role: <strong className="text-slate-800 uppercase">{role.replace('_', ' ')}</strong>
-            </span>
-          </div>
+          <button
+            onClick={() => navigate('/deal-health')}
+            className="text-xs font-bold text-primary hover:underline flex items-center space-x-0.5 shrink-0 self-end sm:self-auto cursor-pointer"
+          >
+            <span>Inspect Deal Health AI</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
         </div>
+      )}
 
-        {/* Action Header Buttons per Role */}
-        <div className="flex items-center gap-2">
-          {role === 'sales_rep' && (
-            <>
-              <button className="btn btn-secondary btn-sm gap-1.5" onClick={() => navigate('/quotations')}>
-                <FileText className="w-3 h-3" /> View My Pipeline ({quotations.length})
-              </button>
-              <button className="btn btn-primary gap-1.5" onClick={() => navigate('/quotations/new')}>
-                <Plus className="w-4 h-4" /> New Quotation
-              </button>
-            </>
-          )}
+      {/* ── Welcome Hero Banner (VendorBridge style) ── */}
+      <div className="rounded-2xl bg-gradient-to-r from-primary to-blue-700 p-6 md:p-8 text-white shadow-premium">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+          <div>
+            <h2 className="font-outfit text-2xl md:text-3xl font-extrabold">
+              Welcome back, {user?.first_name || 'User'}!
+            </h2>
+            <p className="text-blue-100 text-sm mt-1.5 opacity-90">
+              You are logged in as a <span className="font-bold underline uppercase">{role.replace('_', ' ')}</span>. Here is your revenue operations status check.
+            </p>
+          </div>
 
-          {role === 'sales_manager' && (
-            <>
-              <button className="btn btn-secondary btn-sm gap-1.5" onClick={() => navigate('/deal-health')}>
-                <AlertTriangle className="w-3 h-3 text-amber-500" /> Margin Leakage
-              </button>
-              <button className="btn btn-primary btn-sm gap-1.5" onClick={() => navigate('/approvals')}>
-                <ShieldCheck className="w-3.5 h-3.5" /> Approvals Queue
-                <span className="w-4 h-4 rounded-full text-[9px] font-bold text-white flex items-center justify-center bg-rose-600">
-                  {summary?.pending_approvals || pendingQuotes.length || 0}
-                </span>
-              </button>
-            </>
-          )}
+          {/* Quick Actions depending on roles */}
+          <div className="flex flex-wrap gap-3">
+            {role === 'sales_rep' && (
+              <>
+                <button
+                  onClick={() => navigate('/quotations')}
+                  className="flex items-center space-x-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>My Pipeline ({quotations.length})</span>
+                </button>
+                <button
+                  onClick={() => navigate('/quotations/new')}
+                  className="flex items-center space-x-2 rounded-lg bg-white px-4 py-2.5 text-xs font-bold text-primary shadow hover:bg-blue-50 transition-all cursor-pointer"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  <span>New Quotation</span>
+                </button>
+              </>
+            )}
 
-          {role === 'finance' && (
-            <>
-              <button className="btn btn-secondary btn-sm gap-1.5" onClick={() => navigate('/subscriptions')}>
-                <CreditCard className="w-3 h-3" /> Subscriptions & ARR
-              </button>
-              <button className="btn btn-primary btn-sm gap-1.5" onClick={() => navigate('/approvals')}>
-                <ShieldCheck className="w-3.5 h-3.5" /> Finance Sign-off
-                <span className="w-4 h-4 rounded-full text-[9px] font-bold text-white flex items-center justify-center bg-rose-600">
-                  {summary?.pending_approvals || 0}
-                </span>
-              </button>
-            </>
-          )}
+            {role === 'sales_manager' && (
+              <>
+                <button
+                  onClick={() => navigate('/deal-health')}
+                  className="flex items-center space-x-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer"
+                >
+                  <AlertTriangle className="h-4 w-4 text-amber-300" />
+                  <span>Margin Leakage</span>
+                </button>
+                <button
+                  onClick={() => navigate('/approvals')}
+                  className="flex items-center space-x-2 rounded-lg bg-white px-4 py-2.5 text-xs font-bold text-primary shadow hover:bg-blue-50 transition-all cursor-pointer"
+                >
+                  <Clock className="h-4 w-4" />
+                  <span>Review Approvals ({summary?.pending_approvals || pendingQuotes.length})</span>
+                </button>
+              </>
+            )}
 
-          {role === 'admin' && (
-            <>
-              <button className="btn btn-secondary btn-sm gap-1.5" onClick={() => navigate('/reports')}>
-                <Download className="w-3 h-3" /> Export Audit Report
-              </button>
-              <button className="btn btn-primary gap-1.5" onClick={() => navigate('/quotations/new')}>
-                <Plus className="w-4 h-4" /> Create Quotation
-              </button>
-            </>
-          )}
+            {role === 'finance' && (
+              <>
+                <button
+                  onClick={() => navigate('/subscriptions')}
+                  className="flex items-center space-x-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span>Subscriptions & ARR</span>
+                </button>
+                <button
+                  onClick={() => navigate('/approvals')}
+                  className="flex items-center space-x-2 rounded-lg bg-white px-4 py-2.5 text-xs font-bold text-primary shadow hover:bg-blue-50 transition-all cursor-pointer"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>Finance Sign-off ({summary?.pending_approvals || 0})</span>
+                </button>
+              </>
+            )}
+
+            {role === 'admin' && (
+              <>
+                <button
+                  onClick={() => navigate('/reports')}
+                  className="flex items-center space-x-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Export Audit Report</span>
+                </button>
+                <button
+                  onClick={() => navigate('/quotations/new')}
+                  className="flex items-center space-x-2 rounded-lg bg-white px-4 py-2.5 text-xs font-bold text-primary shadow hover:bg-blue-50 transition-all cursor-pointer"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Create Quotation</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Role-Tailored KPI Cards ── */}
-      {role === 'sales_rep' && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">My Quota Attainment</span>
-              <Target className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="metric-value">{quotaAttainment}%</div>
-            <div className="metric-sub">{formatCurrency(myPipelineValue)} of {formatCurrency(quotaTarget)}</div>
-            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
-              <div className="h-full bg-blue-600 rounded-full" style={{ width: `${quotaAttainment}%` }} />
-            </div>
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">My Open Deals</span>
-              <FileText className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="metric-value">{quotations.length}</div>
-            <div className="metric-sub">Active quotes in pipeline</div>
-            <div className="text-xs mt-1 text-slate-500 font-mono">
-              {formatCurrency(myPipelineValue)} Total Value
+      {/* ── KPI Cards Row (VendorBridge exact style) ── */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Card 1 */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium hover:shadow-premium-hover transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {role === 'sales_rep' ? 'Quota Attainment' : role === 'sales_manager' ? 'Urgent Approvals' : role === 'finance' ? 'Contracted ARR' : 'System Health'}
+            </span>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+              role === 'sales_manager' ? 'bg-rose-50 text-danger' : 'bg-blue-50 text-primary'
+            }`}>
+              {role === 'sales_rep' ? <Target className="h-5 w-5" /> :
+               role === 'sales_manager' ? <CheckSquare className="h-5 w-5" /> :
+               role === 'finance' ? <DollarSign className="h-5 w-5" /> : <Activity className="h-5 w-5" />}
             </div>
           </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Awaiting Approval</span>
-              <Clock className="w-4 h-4 text-amber-500" />
-            </div>
-            <div className="metric-value">{pendingQuotes.length}</div>
-            <div className="metric-sub">Pending Deal Desk sign-off</div>
-            {pendingQuotes.length > 0 ? (
-              <span className="badge badge-warning text-[10px] mt-1">In Manager Review</span>
-            ) : (
-              <span className="badge badge-success text-[10px] mt-1">All Cleared</span>
-            )}
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">My Avg Margin</span>
-              <Percent className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="metric-value">{summary?.avg_margin_pct?.toFixed(1) || '31.4'}%</div>
-            <div className="metric-sub">Healthy margin pricing</div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-600">
-              <TrendingUp className="w-3 h-3" /> Exceeds 25% floor
-            </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="font-outfit text-3xl font-extrabold text-slate-900">
+              {role === 'sales_rep' ? `${quotaAttainment}%` :
+               role === 'sales_manager' ? (summary?.pending_approvals || pendingQuotes.length) :
+               role === 'finance' ? '$384.5K' : '99.98%'}
+            </span>
+            <span className="text-xs font-semibold text-slate-500">
+              {role === 'sales_rep' ? `${formatCurrency(myPipelineValue)} of $500K` :
+               role === 'sales_manager' ? 'Decisions Needed' :
+               role === 'finance' ? '+18.4% YoY' : 'SOC2 Type II'}
+            </span>
           </div>
         </div>
-      )}
 
-      {role === 'sales_manager' && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="metric-tile border-l-4 border-l-rose-500">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label font-bold text-rose-700">Urgent Approvals</span>
-              <CheckSquare className="w-4 h-4 text-rose-600" />
+        {/* Card 2 */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium hover:shadow-premium-hover transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {role === 'sales_rep' ? 'Active Pipeline' : role === 'sales_manager' ? 'Team Pipeline' : role === 'finance' ? 'Finance Sign-offs' : 'Enterprise Pipeline'}
+            </span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-success">
+              {role === 'finance' ? <ShieldCheck className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
             </div>
-            <div className="metric-value text-rose-600">{summary?.pending_approvals || pendingQuotes.length || 0}</div>
-            <div className="metric-sub">Stage 1 Decision Needed</div>
-            <button
-              onClick={() => navigate('/approvals')}
-              className="text-xs font-semibold text-rose-700 hover:underline mt-1 flex items-center gap-1"
-            >
-              Open Queue <ArrowRight className="w-3 h-3" />
-            </button>
           </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Team Active Pipeline</span>
-              <FileText className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="metric-value">{summary?.active_pipeline_count || quotations.length}</div>
-            <div className="metric-sub">{formatCurrency(summary?.active_pipeline_value || 1420000)} Total Value</div>
-            <div className="text-xs text-slate-500 mt-1">Across 4 Reps</div>
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Policy Risk Anomalies</span>
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-            </div>
-            <div className="metric-value">{summary?.at_risk_count || stalled.length || 0}</div>
-            <div className="metric-sub">Discount overages / stalled</div>
-            <span className="badge badge-danger text-[10px] mt-1">Action Required</span>
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Gross Margin Realized</span>
-              <Percent className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="metric-value">{summary?.avg_margin_pct?.toFixed(1) || '32.1'}%</div>
-            <div className="metric-sub">Team blended margin</div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-600">
-              <TrendingUp className="w-3 h-3" /> +2.8% vs last month
-            </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="font-outfit text-3xl font-extrabold text-slate-900">
+              {role === 'finance' ? (summary?.pending_approvals || 0) : quotations.length}
+            </span>
+            <span className="text-xs font-semibold text-success flex items-center">
+              {role === 'finance' ? 'High-risk checks' : formatCurrency(summary?.active_pipeline_value || myPipelineValue)}
+            </span>
           </div>
         </div>
-      )}
 
-      {role === 'finance' && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="metric-tile border-l-4 border-l-emerald-600">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label font-bold text-emerald-800">Contracted ARR</span>
-              <DollarSign className="w-4 h-4 text-emerald-600" />
+        {/* Card 3 */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium hover:shadow-premium-hover transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {role === 'sales_rep' ? 'Awaiting Approval' : role === 'sales_manager' ? 'Policy Risk Anomalies' : role === 'finance' ? 'Margin Exposure' : 'Governance Clearance'}
+            </span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-warning">
+              {role === 'sales_rep' ? <Clock className="h-5 w-5" /> :
+               role === 'sales_manager' ? <AlertTriangle className="h-5 w-5" /> :
+               role === 'finance' ? <AlertTriangle className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
             </div>
-            <div className="metric-value text-emerald-700">$384,500</div>
-            <div className="metric-sub">Annual Recurring Revenue</div>
-            <div className="text-xs text-emerald-600 mt-1 font-semibold">+18.4% YoY Expansion</div>
           </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Finance Sign-Offs</span>
-              <ShieldCheck className="w-4 h-4 text-rose-600" />
-            </div>
-            <div className="metric-value text-rose-600">{summary?.pending_approvals || 0}</div>
-            <div className="metric-sub">High-risk discount checks</div>
-            <span className="badge badge-warning text-[10px] mt-1">Stage 2 Sign-off</span>
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Margin Exposure ($)</span>
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-            </div>
-            <div className="metric-value text-amber-600">$18,450</div>
-            <div className="metric-sub">Total discount ceiling overages</div>
-            <div className="text-xs text-slate-500 mt-1">Protected by Risk Scoring</div>
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Billing Invoices</span>
-              <CreditCard className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="metric-value">98.2%</div>
-            <div className="metric-sub">On-time collection SLA</div>
-            <div className="text-xs text-slate-500 mt-1">Hybrid One-time + Recurring</div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="font-outfit text-3xl font-extrabold text-slate-900">
+              {role === 'sales_rep' ? pendingQuotes.length :
+               role === 'sales_manager' ? (summary?.at_risk_count || stalled.length || 0) :
+               role === 'finance' ? '$18.4K' : '64%'}
+            </span>
+            <span className="text-xs font-semibold text-warning">
+              {role === 'sales_rep' ? 'Deal Desk Review' :
+               role === 'sales_manager' ? 'Stalled deals' :
+               role === 'finance' ? 'Protected floor' : 'Zero-touch clear'}
+            </span>
           </div>
         </div>
-      )}
 
-      {role === 'admin' && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">System Health</span>
-              <Activity className="w-4 h-4 text-emerald-600" />
+        {/* Card 4 */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium hover:shadow-premium-hover transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {role === 'finance' ? 'Billing Collection' : 'Gross Margin Realized'}
+            </span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <Percent className="h-4 w-4" />
             </div>
-            <div className="metric-value text-emerald-600">99.98%</div>
-            <div className="metric-sub">SLA Uptime • SOC2 Type II</div>
           </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Enterprise Pipeline</span>
-              <FileText className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="metric-value">{quotations.length} Quotes</div>
-            <div className="metric-sub">{formatCurrency(summary?.active_pipeline_value || 1420000)} Active</div>
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Approval Governance</span>
-              <ShieldCheck className="w-4 h-4 text-purple-600" />
-            </div>
-            <div className="metric-value">{summary?.pending_approvals || 0} Pending</div>
-            <div className="metric-sub">Autonomous clearance 64%</div>
-          </div>
-
-          <div className="metric-tile">
-            <div className="flex items-center justify-between mb-2">
-              <span className="metric-label">Active Modules</span>
-              <Sparkles className="w-4 h-4 text-amber-500" />
-            </div>
-            <div className="metric-value">CPQ + WH + Sub</div>
-            <div className="metric-sub">All 3 engines connected</div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="font-outfit text-2xl font-extrabold text-slate-900 truncate">
+              {role === 'finance' ? '98.2%' : `${summary?.avg_margin_pct?.toFixed(1) || '32.1'}%`}
+            </span>
+            <span className="text-xs font-semibold text-slate-500">
+              {role === 'finance' ? 'On-time SLA' : 'Exceeds 25% floor'}
+            </span>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ── Main Content Grid ── */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Left 2 Columns: Main Pipeline / Approval Queue */}
-        <div className="col-span-2">
-          <div className="card p-0 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3"
-                 style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-              <div className="flex items-center gap-2">
-                {role === 'sales_manager' ? (
-                  <>
-                    <ShieldCheck className="w-4 h-4 text-purple-600" />
-                    <span className="font-semibold text-sm">Urgent Deal Desk Decision Queue</span>
-                  </>
-                ) : role === 'finance' ? (
-                  <>
-                    <DollarSign className="w-4 h-4 text-emerald-600" />
-                    <span className="font-semibold text-sm">Revenue Sign-Off & High-Risk Quotations</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="w-4 h-4 text-blue-600" />
-                    <span className="font-semibold text-sm">
-                      {role === 'sales_rep' ? 'My Active Pipeline & Quotations' : 'High Priority Quotations'}
-                    </span>
-                  </>
-                )}
+      {/* ── Main Charts & Feeds Section (VendorBridge 2-col + 1-col layout) ── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Left 2 Columns: Recharts Area Chart & Quotation Queue */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Spend/Revenue Trend Sparkline (VendorBridge style) */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="font-outfit text-base font-bold text-slate-900">Revenue & Deal Flow Trend</h3>
+                <p className="text-xs text-slate-500">Monthly cumulative booked contract value & revenue pipeline</p>
               </div>
-              <span className="text-[10px]" style={{ color: 'var(--color-text-caption)' }}>
-                {role === 'sales_rep' ? 'Scoped to your sales account' : 'Live operational pipeline queue'}
+              <div className="flex items-center space-x-1 text-success text-xs font-bold">
+                <TrendingUp className="h-3.5 w-3.5" />
+                <span>+18.4% MoM</span>
+              </div>
+            </div>
+
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={revenueTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="spendGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#2563EB" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip 
+                    formatter={(value) => [formatCurrency(Number(value)), 'Booked Value']} 
+                    contentStyle={{ backgroundColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px', border: 'none' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="#2563EB" 
+                    strokeWidth={2.5} 
+                    fillOpacity={1} 
+                    fill="url(#spendGradient)" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Quotations Queue Table (VendorBridge style) */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-premium overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h3 className="font-outfit text-base font-bold text-slate-900">
+                  {role === 'sales_manager' ? 'Urgent Deal Desk Decision Queue' :
+                   role === 'finance' ? 'Revenue Sign-Off & High-Risk Quotations' :
+                   role === 'sales_rep' ? 'My Active Pipeline & Quotations' : 'High Priority Quotations'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {role === 'sales_rep' ? 'Scoped to your sales account' : 'Live operational pipeline queue'}
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/quotations')}
+                className="text-xs font-bold text-primary hover:underline flex items-center space-x-1 cursor-pointer"
+              >
+                <span>View All</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3">Quote ID / Client</th>
+                    <th className="px-6 py-3">Stage</th>
+                    <th className="px-6 py-3">Owner</th>
+                    <th className="px-6 py-3 text-right">Deal Value</th>
+                    <th className="px-6 py-3 text-right">Margin %</th>
+                    <th className="px-6 py-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {myQuotes.slice(0, 6).map((q) => (
+                    <tr 
+                      key={q.id} 
+                      className="hover:bg-slate-50 transition-colors cursor-pointer"
+                      onClick={() => navigate(q.status === 'pending_approval' && (role === 'sales_manager' || role === 'finance') ? `/approvals/${q.id}` : `/quotations/${q.id}`)}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-xs text-primary font-outfit">{q.quote_number}</div>
+                        <div className="text-xs text-slate-500">{q.customer_name}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`badge ${getStatusBadgeClass(q.status)}`}>
+                          {getStatusLabel(q.status)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700">
+                            {q.rep_name.split(' ').map(n => n[0]).join('')}
+                          </div>
+                          <span className="text-xs font-medium text-slate-800">{q.rep_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right font-mono text-xs font-bold text-slate-900">
+                        {formatCurrency(q.total_amount)}
+                      </td>
+                      <td className="px-6 py-4 text-right font-mono text-xs font-bold">
+                        <span className={q.margin_pct >= 25 ? 'text-success' : 'text-warning'}>
+                          {q.margin_pct.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {q.status === 'pending_approval' && (role === 'sales_manager' || role === 'finance' || role === 'admin') ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/approvals/${q.id}`); }}
+                            className="rounded-lg bg-danger px-2.5 py-1 text-xs font-bold text-white shadow-sm hover:bg-danger-hover transition-all cursor-pointer"
+                          >
+                            Review & Approve
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/quotations/${q.id}`); }}
+                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
+                          >
+                            {q.status === 'approved' ? 'Send' : 'Open'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Right 1 Column: Audit Logs Timeline & AI Radars */}
+        <div className="space-y-6">
+          {/* Recent Audit Logs Timeline (VendorBridge exact style) */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="font-outfit text-base font-bold text-slate-900">Recent Audit Stream</h3>
+                <p className="text-xs text-slate-500">Realtime SOC2 activity history</p>
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                LIVE
               </span>
             </div>
 
-            <table className="w-full">
-              <thead>
-                <tr className="table-header">
-                  <th className="text-left px-4 py-2">Quote ID / Client</th>
-                  <th className="text-left px-4 py-2">Stage</th>
-                  <th className="text-left px-4 py-2">Owner</th>
-                  <th className="text-right px-4 py-2">Deal Value</th>
-                  <th className="text-right px-4 py-2">Margin %</th>
-                  <th className="text-center px-4 py-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myQuotes.slice(0, 6).map((q) => (
-                  <tr key={q.id} className="table-row cursor-pointer" onClick={() => navigate(q.status === 'pending_approval' && (role === 'sales_manager' || role === 'finance') ? `/approvals/${q.id}` : `/quotations/${q.id}`)}>
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-xs text-blue-600">{q.quote_number}</div>
-                      <div className="text-[11px] text-slate-500">{q.customer_name}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`badge ${getStatusBadgeClass(q.status)}`} style={{ fontSize: 10 }}>
-                        {getStatusLabel(q.status)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold bg-slate-600">
-                          {q.rep_name.split(' ').map(n => n[0]).join('')}
+            <div className="flow-root">
+              <ul className="-mb-8">
+                {quotations.slice(0, 5).map((q, logIdx) => (
+                  <li key={q.id} className="cursor-pointer" onClick={() => navigate(`/quotations/${q.id}`)}>
+                    <div className="relative pb-6">
+                      {logIdx !== quotations.slice(0, 5).length - 1 ? (
+                        <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-slate-200" aria-hidden="true" />
+                      ) : null}
+                      <div className="relative flex space-x-3">
+                        <div>
+                          <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${
+                            q.status === 'approved' ? 'bg-success-light text-success' :
+                            q.status === 'pending_approval' ? 'bg-warning-light text-warning' :
+                            'bg-primary-light text-primary'
+                          }`}>
+                            {q.status === 'approved' ? <CheckCircle className="h-4 w-4" /> :
+                             q.status === 'pending_approval' ? <Clock className="h-4 w-4" /> : <FileText className="h-4 w-4 text-primary" />}
+                          </span>
                         </div>
-                        <span className="text-xs text-slate-700">{q.rep_name}</span>
+                        <div className="flex-1 min-w-0 pt-1">
+                          <p className="text-xs text-slate-800 font-medium truncate">
+                            {q.customer_name} ({q.quote_number})
+                          </p>
+                          <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                            <span className="font-semibold">{getStatusLabel(q.status)} • {formatCurrency(q.total_amount)}</span>
+                            <span>{timeAgo(q.updated_at)}</span>
+                          </div>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-medium">{formatCurrency(q.total_amount)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-medium"
-                        style={{ color: q.margin_pct >= 25 ? '#10B981' : '#F59E0B' }}>
-                      {q.margin_pct.toFixed(1)}%
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {q.status === 'pending_approval' && (role === 'sales_manager' || role === 'finance' || role === 'admin') ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/approvals/${q.id}`); }}
-                          className="btn btn-primary btn-sm bg-rose-600 hover:bg-rose-700 border-none"
-                          style={{ height: 24, fontSize: 10, padding: '0 8px' }}
-                        >
-                          Review & Approve
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/quotations/${q.id}`); }}
-                          className="btn btn-secondary btn-sm"
-                          style={{ height: 24, fontSize: 10, padding: '0 8px' }}
-                        >
-                          {q.status === 'approved' ? 'Send' : 'Open'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            </div>
           </div>
 
-          {/* Recent Activity Feed */}
-          <div className="card mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <span className="font-semibold text-sm">Recent Deal Stream & Audit Trail</span>
-              </div>
-              <span className="text-[10px] text-slate-400">Live SOC2 Audit Log</span>
+          {/* Autonomous Approval Radar Widget */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-outfit text-sm font-bold text-slate-900">Auto-Approval Radar</h3>
+              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-success-light text-success border border-success/20">
+                ACTIVE
+              </span>
             </div>
-            <div className="flex flex-col gap-3">
-              {quotations.slice(0, 4).map((q, i) => (
-                <div key={q.id} className="flex items-start gap-3 p-2.5 rounded transition-colors hover:bg-slate-50 cursor-pointer"
-                     onClick={() => navigate(`/quotations/${q.id}`)}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                       style={{
-                         background: i % 3 === 0 ? 'var(--color-success-bg)' : i % 3 === 1 ? 'var(--color-warning-bg)' : 'var(--color-info-bg)',
-                         color: i % 3 === 0 ? 'var(--color-success-text)' : i % 3 === 1 ? 'var(--color-warning-text)' : 'var(--color-info-text)',
-                       }}>
-                    {i % 3 === 0 ? <CheckSquare className="w-3.5 h-3.5" /> : i % 3 === 1 ? <AlertTriangle className="w-3.5 h-3.5" /> : <Home className="w-3.5 h-3.5" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-xs font-semibold">{q.customer_name} — {q.quote_number}</div>
-                    <div className="text-[11px] text-slate-500">
-                      {getStatusLabel(q.status)} • {formatCurrency(q.total_amount)} • Rep: {q.rep_name}
-                    </div>
-                  </div>
-                  <span className="text-[10px] whitespace-nowrap text-slate-400">
-                    {timeAgo(q.updated_at)}
-                  </span>
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-slate-600 font-medium">Autonomous Clearance Rate</span>
+                <span className="font-mono text-sm font-bold text-primary">64%</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full rounded-full bg-primary" style={{ width: '64%' }} />
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500 mb-4">
+              32 of 50 deals in the past 7 days cleared zero-touch within predefined delegation bounds.
+            </p>
+
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              {[
+                { label: 'Bronze (≤ 5%)', count: 21, pct: 42, color: 'bg-amber-600' },
+                { label: 'Silver (5% – 10%)', count: 19, pct: 38, color: 'bg-slate-400' },
+                { label: 'Gold (> 10% Escalation)', count: 10, pct: 20, color: 'bg-rose-600' },
+              ].map(t => (
+                <div key={t.label} className="flex items-center gap-2 text-xs">
+                  <span className={`w-2 h-2 rounded-full ${t.color}`} />
+                  <span className="text-[11px] flex-1 text-slate-700 font-medium">{t.label}</span>
+                  <span className="text-[11px] text-slate-400">{t.count} deals</span>
+                  <span className="font-mono text-[11px] font-bold text-slate-800 w-8 text-right">{t.pct}%</span>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* Right Column: Role-Tailored Widgets */}
-        <div className="flex flex-col gap-6">
-          {/* Role Widget 1: Manager Leaderboard / Rep Target Widget / Finance Ledger */}
-          {role === 'sales_manager' ? (
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-sm flex items-center gap-1.5">
-                  <Award className="w-4 h-4 text-amber-500" /> Rep Performance Leaderboard
-                </span>
-                <span className="badge badge-info text-[9px]">Q1 Standings</span>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { name: 'Elena Vance', deals: 8, volume: '$345,000', margin: '34.2%', pct: 86 },
-                  { name: 'Marcus Chen', deals: 6, volume: '$280,000', margin: '31.0%', pct: 70 },
-                  { name: 'Sophia Reeves', deals: 4, volume: '$190,000', margin: '28.5%', pct: 48 },
-                ].map((rep, idx) => (
-                  <div key={rep.name} className="p-2.5 rounded bg-slate-50 border border-slate-100">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-blue-600">#{idx + 1}</span>
-                        <span className="text-xs font-semibold text-slate-800">{rep.name}</span>
-                      </div>
-                      <span className="text-xs font-bold font-mono text-slate-700">{rep.volume}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1.5">
-                      <span>{rep.deals} closed deals</span>
-                      <span className="text-emerald-600 font-semibold">{rep.margin} margin</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-600 rounded-full" style={{ width: `${rep.pct}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : role === 'finance' ? (
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-sm flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4 text-emerald-600" /> Revenue Stream Composition
-                </span>
-              </div>
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                  <span className="text-slate-600">Recurring Cloud Subscriptions</span>
-                  <span className="font-mono font-bold text-slate-800">$264,000 / yr</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                  <span className="text-slate-600">Hardware & Appliance Sales</span>
-                  <span className="font-mono font-bold text-slate-800">$480,000</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                  <span className="text-slate-600">Professional Services & SLA</span>
-                  <span className="font-mono font-bold text-slate-800">$120,500</span>
-                </div>
-                <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px]">
-                  <strong>Revenue Recognition:</strong> Compliant with ASC 606 standards. Hybrid proration engine active.
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Sales Rep Widget: Delegation Guidelines */
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-sm flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-blue-600" /> Discount Delegation Bounds
-                </span>
-                <span className="badge badge-success text-[9px]">TIER RULES</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mb-3">
-                Discounts within tier limits clear automatically without Deal Desk delays.
-              </p>
-              <div className="space-y-2">
-                <div className="p-2 rounded bg-amber-50 border border-amber-200 text-xs flex justify-between">
-                  <div>
-                    <span className="font-bold text-amber-800">Bronze Tier (≤ 5%):</span>
-                    <div className="text-[10px] text-amber-700">Auto-approved instant checkout</div>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 self-center">Instant</span>
-                </div>
-                <div className="p-2 rounded bg-slate-50 border border-slate-200 text-xs flex justify-between">
-                  <div>
-                    <span className="font-bold text-slate-800">Silver Tier (5% – 10%):</span>
-                    <div className="text-[10px] text-slate-600">Requires Sales Manager sign-off</div>
-                  </div>
-                  <span className="text-[10px] font-bold text-blue-600 self-center">~2h SLA</span>
-                </div>
-                <div className="p-2 rounded bg-rose-50 border border-rose-200 text-xs flex justify-between">
-                  <div>
-                    <span className="font-bold text-rose-800">Gold Tier (&gt; 10%):</span>
-                    <div className="text-[10px] text-rose-700">Manager + Finance dual sign-off</div>
-                  </div>
-                  <span className="text-[10px] font-bold text-rose-600 self-center">~6h SLA</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Autonomous Approval Clearance Radar */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-semibold text-sm">Auto-Approval Radar</span>
-              <span className="badge badge-success" style={{ fontSize: 9, height: 16 }}>ENGINE ACTIVE</span>
-            </div>
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-slate-600">Autonomous Clearance Rate</span>
-                <span className="font-mono text-sm font-bold text-blue-600">64%</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-blue-600" style={{ width: '64%' }} />
-              </div>
-            </div>
-            <div className="text-[11px] text-slate-500 mb-3">
-              32 of 50 deals in the past 7 days cleared zero-touch within predefined delegation bounds.
-            </div>
-
-            <div className="text-xs font-semibold mb-2 uppercase tracking-wider text-slate-500 text-[10px]">
-              Discount Tier Utilization
-            </div>
-            {[
-              { label: 'Bronze (≤ 5%)', count: 21, pct: 42, color: '#CD7F32' },
-              { label: 'Silver (5% – 10%)', count: 19, pct: 38, color: '#94A3B8' },
-              { label: 'Gold (> 10% Escalation)', count: 10, pct: 20, color: '#E11D48' },
-            ].map(t => (
-              <div key={t.label} className="flex items-center gap-2 py-1">
-                <span className="w-2 h-2 rounded-sm" style={{ background: t.color }} />
-                <span className="text-[11px] flex-1 text-slate-700">{t.label}</span>
-                <span className="text-[11px] text-slate-500">{t.count} deals</span>
-                <span className="font-mono text-[11px] font-semibold w-8 text-right text-slate-800">{t.pct}%</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Stalled Deal Radar */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-semibold text-sm">Stalled Deal Radar</span>
-              {stalled.length > 0 && (
-                <span className="text-xs font-semibold text-rose-600">{stalled.length} Alerts</span>
-              )}
-            </div>
-            <div className="text-[10px] text-slate-500 mb-3">
-              Deals idle beyond 14 days or exhibiting margin slippage during counter-offers.
-            </div>
-            {stalled.slice(0, 3).map((s, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-t border-slate-100">
-                <div>
-                  <div className="text-xs font-semibold text-slate-800">{s.customer_name}</div>
-                  <div className="text-[10px] text-slate-500">
-                    Idle {s.days_idle} days • {formatCurrency(s.total_amount)}
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/quotations`)}
-                  className="btn btn-sm"
-                  style={{
-                    height: 22, fontSize: 10, padding: '0 8px',
-                    color: s.severity === 'high' ? '#E11D48' : '#2563EB',
-                    border: `1px solid ${s.severity === 'high' ? 'var(--color-danger-border)' : 'var(--color-surface-border)'}`,
-                    background: s.severity === 'high' ? 'var(--color-danger-bg)' : 'white',
-                  }}
-                >
-                  {s.severity === 'high' ? 'Escalate' : 'Inspect'}
-                </button>
-              </div>
-            ))}
           </div>
         </div>
       </div>

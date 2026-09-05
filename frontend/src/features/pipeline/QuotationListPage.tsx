@@ -1,128 +1,206 @@
 /**
- * Quotation List Page — B2 Pipeline / List view.
+ * Quotation List Page — Tabular Deals Pipeline.
+ * Styled in the exact visual design system of VendorBridge:
+ * - Outfit font for headers
+ * - shadow-premium card container
+ * - Modern pill filters
+ * - Clean borders, hover effects, and badge chips
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { fetchQuotations } from '../../api/quotations';
 import { formatCurrency, formatDate, getStatusBadgeClass } from '../../lib/utils';
-import { Plus, Filter, ExternalLink } from 'lucide-react';
+import { PlusCircle, Filter, ExternalLink, RefreshCw, Eye, FileDown } from 'lucide-react';
 import { useState } from 'react';
 
 export function QuotationListPage() {
   const [statusFilter, setStatusFilter] = useState('');
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['quotations', statusFilter],
     queryFn: () => fetchQuotations(statusFilter ? { status: statusFilter } : undefined),
   });
 
   const quotations = data?.results || [];
 
+  const handleDownloadPdf = async (id: number, quoteNumber?: string) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/quotations/${id}/pdf/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${quoteNumber || `Q-${id}`}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Failed to download PDF:', e);
+      alert('Could not download quotation PDF.');
+    }
+  };
+
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div>
-          <p className="text-xs text-[var(--color-text-muted)] mb-1">WORKSPACE › QUOTATIONS PIPELINE</p>
-          <h1 className="text-headline-xl">Quotations & Deals Pipeline</h1>
+          <h2 className="font-outfit text-xl md:text-2xl font-extrabold text-slate-900">
+            Quotations & Deals Register
+          </h2>
+          <p className="text-xs text-slate-500">
+            Audit register of enterprise quotations, discount compliance, and customer approval statuses
+          </p>
         </div>
-        <Link
-          to="/quotations/new"
-          className="flex items-center gap-1.5 px-4 h-9 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-semibold rounded border border-[var(--color-primary-hover)] transition"
-        >
-          <Plus className="w-4 h-4" /> New Quotation
-        </Link>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => refetch()}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 shadow-sm cursor-pointer"
+            title="Refresh"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+          <Link
+            to="/quotations/new"
+            className="flex items-center space-x-2 rounded-lg bg-primary hover:bg-primary-hover px-4 py-2 text-xs font-bold text-white shadow-sm transition-all cursor-pointer"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span>New Quotation</span>
+          </Link>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)]">
-          <Filter className="w-4 h-4" /> Filter:
+      {/* Filters (VendorBridge style) */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-premium flex flex-wrap items-center gap-2">
+        <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-500 mr-2">
+          <Filter className="h-3.5 w-3.5 text-slate-400" />
+          <span>Filter Status:</span>
         </div>
         {['', 'draft', 'pending_approval', 'approved', 'confirmed', 'rejected'].map(status => (
           <button
             key={status}
             onClick={() => setStatusFilter(status)}
-            className={`px-3 py-1.5 text-sm rounded border transition ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
               statusFilter === status
-                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                : 'bg-white text-[var(--color-text-secondary)] border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]'
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
-            {status === '' ? 'All' : status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            {status === '' ? 'All Statuses' : status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
           </button>
         ))}
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-[var(--color-canvas)]">
-              <th className="text-label-uppercase text-left px-4 py-2.5 border-b border-[var(--color-border)]">Quote ID</th>
-              <th className="text-label-uppercase text-left px-4 py-2.5 border-b border-[var(--color-border)]">Customer</th>
-              <th className="text-label-uppercase text-left px-4 py-2.5 border-b border-[var(--color-border)]">Status</th>
-              <th className="text-label-uppercase text-left px-4 py-2.5 border-b border-[var(--color-border)]">Rep</th>
-              <th className="text-label-uppercase text-right px-4 py-2.5 border-b border-[var(--color-border)]">Value</th>
-              <th className="text-label-uppercase text-right px-4 py-2.5 border-b border-[var(--color-border)]">Risk Score</th>
-              <th className="text-label-uppercase text-left px-4 py-2.5 border-b border-[var(--color-border)]">Created</th>
-              <th className="text-label-uppercase text-center px-4 py-2.5 border-b border-[var(--color-border)]">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">Loading...</td></tr>
-            ) : quotations.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">No quotations found</td></tr>
-            ) : quotations.map(q => (
-              <tr key={q.id} className="hover:bg-[var(--color-canvas)] transition-colors border-b border-[var(--color-surface-alt)]">
-                <td className="px-4 py-2.5">
-                  <Link to={`/quotations/${q.id}`} className="text-[var(--color-primary)] font-medium text-sm hover:underline">Q-{q.id}</Link>
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className="text-sm font-medium">{q.customer_name}</span>
-                  <span className={`ml-2 badge ${q.customer_tier === 'gold' ? 'badge-active' : q.customer_tier === 'silver' ? 'badge-pending' : 'badge-approved'}`}>
-                    {q.customer_tier?.toUpperCase()}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className={`badge ${getStatusBadgeClass(q.status)}`}>
-                    <span className="badge-dot" />
-                    {q.status_display}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-sm text-[var(--color-text-secondary)]">{q.sales_rep_name}</td>
-                <td className="px-4 py-2.5 text-right font-mono text-sm font-medium">{formatCurrency(q.total || '0')}</td>
-                <td className="px-4 py-2.5 text-right font-mono text-sm">
-                  {parseFloat(q.blended_risk_score) > 0
-                    ? <span className="text-[var(--color-rose)]">{parseFloat(q.blended_risk_score).toFixed(1)}</span>
-                    : <span className="text-[var(--color-text-disabled)]">—</span>
-                  }
-                </td>
-                <td className="px-4 py-2.5 text-sm text-[var(--color-text-muted)]">{formatDate(q.created_at)}</td>
-                <td className="px-4 py-2.5 text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <Link
-                      to={q.status === 'pending_approval' ? `/approvals/${q.id}` : `/quotations/${q.id}`}
-                      className="px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] border border-[var(--color-primary)] rounded hover:bg-[var(--color-primary-light)] transition"
-                    >
-                      {q.status === 'pending_approval' ? 'Review' : 'Open'}
-                    </Link>
-                    <a
-                      href={`/portal/quotations/${(q as any).portal_token || q.quote_number || q.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open in Customer Portal"
-                      className="p-1 text-slate-500 hover:text-blue-600 border border-slate-200 rounded hover:bg-slate-50 transition"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                </td>
+      {/* Table (VendorBridge style) */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-premium overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-600">
+            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-3">Quote ID</th>
+                <th className="px-6 py-3">Customer</th>
+                <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3">Sales Rep</th>
+                <th className="px-6 py-3 text-right">Value</th>
+                <th className="px-6 py-3 text-right">Risk Score</th>
+                <th className="px-6 py-3 text-left">Created</th>
+                <th className="px-6 py-3 text-center">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-xs text-slate-400">
+                    <RefreshCw className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
+                    Loading quotations data...
+                  </td>
+                </tr>
+              ) : quotations.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-xs text-slate-400">
+                    No quotations found matching filter.
+                  </td>
+                </tr>
+              ) : quotations.map(q => (
+                <tr key={q.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <Link to={`/quotations/${q.id}`} className="font-outfit font-bold text-xs text-primary hover:underline">
+                      Q-{q.id}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-semibold text-slate-900">{q.customer_name}</span>
+                      {q.customer_tier && (
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${
+                          q.customer_tier === 'gold' ? 'bg-amber-50 text-warning border-amber-200' :
+                          q.customer_tier === 'silver' ? 'bg-slate-100 text-slate-600 border-slate-300' :
+                          'bg-blue-50 text-primary border-blue-200'
+                        }`}>
+                          {q.customer_tier}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`badge ${getStatusBadgeClass(q.status)}`}>
+                      {q.status_display || q.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-medium text-slate-800">
+                    {q.sales_rep_name}
+                  </td>
+                  <td className="px-6 py-4 text-right font-mono text-xs font-bold text-slate-900">
+                    {formatCurrency(q.total || '0')}
+                  </td>
+                  <td className="px-6 py-4 text-right font-mono text-xs">
+                    {parseFloat(q.blended_risk_score) > 0 ? (
+                      <span className="font-bold text-danger">
+                        {parseFloat(q.blended_risk_score).toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-xs text-slate-400">
+                    {formatDate(q.created_at)}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex items-center justify-center space-x-2">
+                      <Link
+                        to={q.status === 'pending_approval' ? `/approvals/${q.id}` : `/quotations/${q.id}`}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+                      >
+                        {q.status === 'pending_approval' ? 'Review' : 'Open'}
+                      </Link>
+                      <button
+                        onClick={() => handleDownloadPdf(q.id, q.quote_number)}
+                        title="Download Quotation PDF"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:bg-slate-50 transition-all cursor-pointer"
+                      >
+                        <FileDown className="h-3.5 w-3.5" />
+                      </button>
+                      <a
+                        href={`/portal/quotations/${(q as any).portal_token || q.quote_number || q.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open in Customer Portal"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-primary hover:bg-slate-50 transition-all"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

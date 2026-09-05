@@ -1,10 +1,15 @@
 /**
- * Login Page — enterprise-styled authentication screen.
+ * Login Page — Enterprise Authentication Screen.
+ * Styled in the exact visual design system of VendorBridge:
+ * - Gradient slate backdrop with glowing ambient orbs
+ * - Glassmorphic card container with Outfit typography
+ * - Quick Demo persona auto-fill buttons
+ * - Clear inputs with eye toggle and smooth hover/focus transitions
  */
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { Zap, AlertCircle, Eye, EyeOff, Lock, User, LogIn } from 'lucide-react';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -17,116 +22,112 @@ export function LoginPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!username || !password) {
+      setError('Please enter both username and password.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
       await login(username, password);
       navigate('/dashboard');
-    } catch {
-      setError('Invalid credentials. Please try again.');
+    } catch (err: any) {
+      const msg = err?.detail || err?.message || (typeof err === 'string' ? err : 'Invalid credentials. Please verify and try again.');
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   const demoAccounts = [
-    { username: 'elena.vance', role: 'Sales Rep', password: 'demo123' },
-    { username: 'm.shah', role: 'Sales Manager', password: 'demo123' },
-    { username: 'r.iyer', role: 'Finance', password: 'demo123' },
-    { username: 'admin', role: 'Admin', password: 'admin123' },
+    { username: 'elena.vance', role: 'Sales Rep', password: 'demo123', label: '💼 Sales Rep (Elena)' },
+    { username: 'm.shah', role: 'Sales Manager', password: 'demo123', label: '🛡️ Manager (M. Shah)' },
+    { username: 'r.iyer', role: 'Finance', password: 'demo123', label: '📊 Finance (R. Iyer)' },
+    { username: 'admin', role: 'Admin', password: 'admin123', label: '🔑 Admin (Full Access)' },
   ];
 
+  const autofillDemo = (acc: typeof demoAccounts[0]) => {
+    setUsername(acc.username);
+    setPassword(acc.password);
+    setError('');
+  };
+
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--color-surface-canvas)' }}>
-      {/* Left Panel — Branding */}
-      <div className="hidden lg:flex flex-col justify-between w-[45%] p-12"
-           style={{ background: 'linear-gradient(135deg, #0F172A 0%, #1E3A8A 50%, #2563EB 100%)' }}>
-        <div>
-          <div className="flex items-center gap-3 mb-16">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-lg"
-                 style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)' }}>
-              A
-            </div>
-            <span className="text-white text-xl font-semibold">DealFlow360</span>
-          </div>
-          <h1 className="text-white text-4xl font-bold leading-tight mb-6" style={{ letterSpacing: '-0.02em' }}>
-            Enterprise Revenue<br />Operations Platform
-          </h1>
-          <p className="text-blue-200 text-base leading-relaxed max-w-md">
-            Self-governing deal engine with automated discount governance,
-            real-time warehouse fulfillment, and hybrid billing — all in one platform.
-          </p>
-        </div>
-        <div className="flex items-center gap-6 text-blue-300 text-xs">
-          <span>SOC2 Type II Certified</span>
-          <span>•</span>
-          <span>System SLA 99.98%</span>
-          <span>•</span>
-          <span>Enterprise Grade</span>
-        </div>
-      </div>
+    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 py-12 sm:px-6 lg:px-8 bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden font-sans">
+      {/* Dynamic Background Glowing Orbs (VendorBridge exact style) */}
+      <div className="absolute top-1/4 left-1/4 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-600/15 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 h-96 w-96 translate-x-1/2 translate-y-1/2 rounded-full bg-indigo-600/10 blur-3xl pointer-events-none" />
 
-      {/* Right Panel — Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <div className="flex items-center gap-2 mb-2 lg:hidden">
-            <div className="w-8 h-8 rounded-md flex items-center justify-center text-white font-bold text-sm"
-                 style={{ background: '#2563EB' }}>A</div>
-            <span className="font-semibold text-lg">DealFlow<span style={{ color: '#2563EB' }}>360</span></span>
+      <div className="w-full max-w-md space-y-8 z-10">
+        {/* Brand Header */}
+        <div className="flex flex-col items-center text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-xl shadow-primary/30">
+            <Zap className="h-7 w-7" />
           </div>
-
-          <h2 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>
-            Sign in to your account
+          <h2 className="mt-5 font-outfit text-3xl font-extrabold tracking-tight text-white">
+            DealFlow<span className="text-primary">360</span>
           </h2>
-          <p className="text-sm mb-8" style={{ color: 'var(--color-text-caption)' }}>
-            Access the Sales Operations workspace
+          <p className="mt-1.5 text-xs text-slate-400 font-medium">
+            Autonomous Deal Governance & Revenue Operations Platform
           </p>
+        </div>
+
+        {/* Auth Card (VendorBridge style) */}
+        <div className="bg-slate-800/80 border border-slate-700/50 backdrop-blur-md rounded-2xl p-8 shadow-2xl space-y-6">
+          <div className="border-b border-slate-700/60 pb-4 text-center">
+            <h3 className="text-base font-bold text-white font-outfit">Sign in to your account</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Access your role-based deal desk workspace</p>
+          </div>
 
           {error && (
-            <div className="mb-4 px-4 py-3 rounded text-sm"
-                 style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger-text)', border: '1px solid var(--color-danger-border)' }}>
-              {error}
+            <div className="flex items-center space-x-2 rounded-lg border border-danger/20 bg-danger/10 p-3 text-xs font-medium text-danger">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
-                     style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.05em' }}>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                 Username
               </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="input"
-                placeholder="Enter your username"
-                required
-                autoFocus
-              />
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <User className="h-4 w-4" />
+                </span>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. elena.vance or admin"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
-                     style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.05em' }}>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                 Password
               </label>
               <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <Lock className="h-4 w-4" />
+                </span>
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input pr-10"
-                  placeholder="Enter your password"
-                  required
+                  placeholder="••••••••"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: 'var(--color-text-caption)' }}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-200"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -134,50 +135,48 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-full mt-2"
-              style={{ height: 42 }}
+              className="w-full flex items-center justify-center space-x-2 py-3 px-4 border border-transparent rounded-lg text-xs font-bold text-white bg-primary hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary shadow-lg shadow-primary/20 transition-all disabled:opacity-50 mt-6 cursor-pointer"
             >
               {loading ? (
-                <RefreshCwIcon />
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white" />
               ) : (
                 <>
-                  <LogIn className="w-4 h-4" />
-                  Sign In
+                  <LogIn className="h-4 w-4" />
+                  <span>Sign In to Workspace</span>
                 </>
               )}
             </button>
           </form>
 
-          {/* Demo Accounts */}
-          <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-3"
-               style={{ color: 'var(--color-text-caption)', letterSpacing: '0.05em' }}>
-              Demo Accounts
-            </p>
+          {/* Quick Demo Login Triggers (VendorBridge exact pattern) */}
+          <div className="pt-4 border-t border-slate-700/50">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center mb-2.5">
+              Quick Demo Personas
+            </span>
             <div className="grid grid-cols-2 gap-2">
-              {demoAccounts.map((acc) => (
+              {demoAccounts.map(acc => (
                 <button
                   key={acc.username}
-                  onClick={() => { setUsername(acc.username); setPassword(acc.password); }}
-                  className="card flex flex-col items-start p-3 cursor-pointer transition-all hover:border-blue-400"
-                  style={{ fontSize: 12 }}
+                  type="button"
+                  onClick={() => autofillDemo(acc)}
+                  className="bg-slate-900 hover:bg-slate-950 text-slate-300 hover:text-white px-2.5 py-2 text-xs font-semibold border border-slate-700 rounded-lg text-left truncate transition-all cursor-pointer"
                 >
-                  <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{acc.username}</span>
-                  <span style={{ color: 'var(--color-text-caption)', fontSize: 10 }}>{acc.role}</span>
+                  {acc.label}
                 </button>
               ))}
             </div>
           </div>
         </div>
+
+        {/* Footer Subtext */}
+        <div className="flex items-center justify-center space-x-4 text-[11px] text-slate-500">
+          <span>SOC2 Type II Certified</span>
+          <span>•</span>
+          <span>SLA 99.98%</span>
+          <span>•</span>
+          <span>Enterprise RevOps</span>
+        </div>
       </div>
     </div>
-  );
-}
-
-function RefreshCwIcon() {
-  return (
-    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
   );
 }

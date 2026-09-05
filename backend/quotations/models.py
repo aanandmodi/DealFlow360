@@ -4,6 +4,7 @@ Person A owns this app. Person C created these stubs for Admin/Portal/Dashboard 
 Person A will expand these with full business logic.
 """
 from django.db import models
+from decimal import Decimal
 from django.conf import settings
 
 
@@ -50,6 +51,7 @@ class Product(models.Model):
     sku = models.CharField(max_length=50, unique=True, blank=True)
     category = models.CharField(max_length=20, choices=Category.choices, db_index=True)
     base_price = models.DecimalField(max_digits=12, decimal_places=2)
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     unit = models.CharField(max_length=20, default='unit')
     tax_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     description = models.TextField(blank=True)
@@ -60,6 +62,10 @@ class Product(models.Model):
     class Meta:
         db_table = 'quotations_product'
         ordering = ['name']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(base_price__gte=0, cost_price__gte=0), name='product_prices_nonnegative'),
+            models.CheckConstraint(condition=models.Q(tax_pct__gte=0, tax_pct__lte=100), name='product_tax_range'),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.get_category_display()}) — ${self.base_price}"
@@ -83,7 +89,7 @@ class PriceList(models.Model):
     """Tier-based price list."""
     name = models.CharField(max_length=100)
     tier = models.CharField(max_length=10, choices=Customer.Tier.choices)
-    currency = models.CharField(max_length=3, default='USD')
+    currency = models.CharField(max_length=3, default='INR')
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -269,8 +275,8 @@ class Quotation(models.Model):
         total = self.total_amount
         if total == 0:
             return 0
-        cost = sum(float(line.qty * line.unit_price) * 0.65 for line in self.lines.all())
-        return round(((float(total) - cost) / float(total)) * 100, 1)
+        cost = sum(line.qty * (line.cost_price if line.cost_price is not None else line.product.cost_price) for line in self.lines.all())
+        return float(((total - cost) / total * 100).quantize(Decimal('0.1')))
 
 
 class QuotationLine(models.Model):
@@ -283,10 +289,24 @@ class QuotationLine(models.Model):
     discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     line_limit_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     is_subscription = models.BooleanField(default=False)
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    tax_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    variant = models.ForeignKey(ProductVariant, null=True, blank=True, on_delete=models.PROTECT)
+
+    def save(self, *args, **kwargs):
+        if self.cost_price is None:
+            self.cost_price = self.product.cost_price
+        if self.tax_pct is None:
+            self.tax_pct = self.product.tax_pct
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'quotations_quotation_line'
         ordering = ['id']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(qty__gt=0, unit_price__gte=0), name='quote_line_positive_quantity_price'),
+            models.CheckConstraint(condition=models.Q(discount_pct__gte=0, discount_pct__lte=100), name='quote_line_discount_range'),
+        ]
 
     def __str__(self):
         return f"{self.product.name} x{self.qty} @ ${self.unit_price} ({self.discount_pct}% off)"
@@ -301,26 +321,23 @@ class QuotationLine(models.Model):
 
     @property
     def gross_total(self):
-        return float(self.qty * self.unit_price)
+        return self.qty * self.unit_price
 
     @property
     def line_total(self):
-        base = float(self.qty * self.unit_price)
-        discount = base * (float(self.discount_pct) / 100)
-        return float(base - discount)
+        return (self.qty * self.unit_price * (1 - self.discount_pct / 100)).quantize(Decimal('0.01'))
 
     @property
     def discount_amount(self):
-        return float(self.qty * self.unit_price) * (float(self.discount_pct) / 100)
+        return self.gross_total - self.line_total
 
     @property
     def net_price(self):
-        return float(self.unit_price) * (1 - float(self.discount_pct) / 100)
+        return self.unit_price * (1 - self.discount_pct / 100)
 
     @property
     def tax_amount(self):
-        tax_pct = float(getattr(self.product, 'tax_pct', 0) or 0)
-        return float(self.line_total) * (tax_pct / 100)
+        return (self.line_total * (self.tax_pct if self.tax_pct is not None else self.product.tax_pct) / 100).quantize(Decimal('0.01'))
 
     @property
     def category_name(self):

@@ -1,11 +1,11 @@
 /**
  * Approval Detail Page — B4 Discount Approval Screen.
- *
- * Per the context (section 1.4/B4):
- * - Shows blended risk score and which lines caused it
- * - Approval steps list (Manager, +Finance if required)
- * - Approve/Reject/Return buttons
- * - Confirmation view showing the audit trail entry
+ * Styled in the exact visual design system of VendorBridge:
+ * - Outfit font for headers and financial KPIs
+ * - shadow-premium cards
+ * - Tabular risk breakdown with status pills
+ * - Interactive Decision Memorandum panel
+ * - Timeline audit trail
  */
 
 import { useState } from 'react';
@@ -22,7 +22,7 @@ import {
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle2,
   XCircle, RotateCcw, FileText, User, Clock,
-  TrendingUp, TrendingDown, Shield,
+  TrendingUp, Shield, MessageSquare, RefreshCw
 } from 'lucide-react';
 
 export function ApprovalDetailPage() {
@@ -65,7 +65,11 @@ export function ApprovalDetailPage() {
   });
 
   if (isLoading || !quotation) {
-    return <div className="p-6"><div className="text-sm text-[var(--color-text-muted)]">Loading approval details...</div></div>;
+    return (
+      <div className="flex items-center justify-center py-24">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   const riskScore = parseFloat(quotation.blended_risk_score);
@@ -74,196 +78,217 @@ export function ApprovalDetailPage() {
   const breachedLines = lineDetails.filter(l => l.policy_status === 'over_limit');
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div>
-          <button onClick={() => navigate('/approvals')} className="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] mb-1 transition">
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Approval Queue
+          <button
+            onClick={() => navigate('/approvals')}
+            className="flex items-center space-x-1 text-xs font-semibold text-slate-500 hover:text-primary mb-1.5 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Approval Queue</span>
           </button>
-          <h1 className="text-headline-xl flex items-center gap-3">
-            Discount Approval — Q-{id}
+          <div className="flex items-center space-x-3">
+            <h2 className="font-outfit text-xl md:text-2xl font-extrabold text-slate-900">
+              Discount Approval — Q-{id}
+            </h2>
             <span className={`badge ${getStatusBadgeClass(quotation.status)}`}>
-              <span className="badge-dot" /> {quotation.status_display}
+              {quotation.status_display}
             </span>
-          </h1>
-          <p className="text-sm text-[var(--color-text-muted)] mt-1">
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
             {quotation.customer_name} • {quotation.customer_tier_display} Tier • Rep: {quotation.sales_rep_name}
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-[var(--color-text-muted)]">DEAL VALUE</div>
-          <div className="font-mono text-2xl font-bold text-[var(--color-text-primary)]">{formatCurrency(quotation.total)}</div>
+
+        <div className="text-left sm:text-right rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Total Contract Value</div>
+          <div className="font-outfit text-2xl font-extrabold text-slate-900">{formatCurrency(quotation.total)}</div>
         </div>
       </div>
 
       {/* Action Result Banner */}
       {actionTaken && (
-        <div className={`mb-6 p-4 rounded-md border flex items-center gap-3 ${
-          actionTaken === 'approved' ? 'bg-[var(--color-emerald-bg)] border-[var(--color-emerald-border)]' :
-          actionTaken === 'rejected' ? 'bg-[var(--color-rose-bg)] border-[var(--color-rose-border)]' :
-          'bg-[var(--color-amber-bg)] border-[var(--color-amber-border)]'
+        <div className={`p-4 rounded-xl border flex items-center gap-3 shadow-sm ${
+          actionTaken === 'approved' ? 'bg-success-light border-success/30 text-success' :
+          actionTaken === 'rejected' ? 'bg-danger-light border-danger/30 text-danger' :
+          'bg-warning-light border-warning/30 text-warning'
         }`}>
-          {actionTaken === 'approved' ? <CheckCircle2 className="w-5 h-5 text-[var(--color-emerald)]" /> :
-           actionTaken === 'rejected' ? <XCircle className="w-5 h-5 text-[var(--color-rose)]" /> :
-           <RotateCcw className="w-5 h-5 text-[var(--color-amber)]" />}
-          <span className="text-sm font-medium">
+          {actionTaken === 'approved' ? <CheckCircle2 className="w-5 h-5 text-success shrink-0" /> :
+           actionTaken === 'rejected' ? <XCircle className="w-5 h-5 text-danger shrink-0" /> :
+           <RotateCcw className="w-5 h-5 text-warning shrink-0" />}
+          <span className="text-xs font-bold">
             {actionTaken === 'approved' ? 'Quotation approved successfully. Audit trail entry recorded.' :
              actionTaken === 'rejected' ? 'Quotation rejected. Sales rep notified.' :
              'Quotation returned for revision. Rep can edit and resubmit.'}
           </span>
-          <Link to={`/quotations/${id}`} className="ml-auto text-sm text-[var(--color-primary)] hover:underline font-medium">
+          <Link to={`/quotations/${id}`} className="ml-auto text-xs font-bold underline">
             View Quotation →
           </Link>
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
-        {/* Left — 2 cols */}
-        <div className="col-span-2 space-y-4">
-          {/* Why This Quote Was Flagged */}
-          <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1">
-            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-[var(--color-amber)]" />
-              <h2 className="text-title-sm">Why This Quote Was Flagged</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Why This Quote Was Flagged Card (VendorBridge style) */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium">
+            <div className="flex items-center space-x-2 border-b border-slate-100 pb-4 mb-5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-warning">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="font-outfit text-sm font-bold text-slate-900">Governance Risk Trigger Explanation</h3>
+                <p className="text-[11px] text-slate-500">Autonomous risk analysis of requested discounts</p>
+              </div>
             </div>
-            <div className="p-4">
-              <div className="flex items-center gap-4 mb-4">
-                <div className={`px-4 py-3 rounded-md border ${
-                  riskScore >= 5 ? 'bg-[var(--color-rose-bg)] border-[var(--color-rose-border)]' :
-                  riskScore > 0 ? 'bg-[var(--color-amber-bg)] border-[var(--color-amber-border)]' :
-                  'bg-[var(--color-emerald-bg)] border-[var(--color-emerald-border)]'
-                }`}>
-                  <div className="text-xs font-medium mb-0.5 text-[var(--color-text-muted)]">BLENDED RISK SCORE</div>
-                  <div className="font-mono text-2xl font-bold">{riskScore.toFixed(2)}</div>
-                  <span className={`badge ${getRiskBadgeClass(quotation.blended_risk_score)} mt-1`}>
-                    <span className="badge-dot" /> {getRiskLabel(quotation.blended_risk_score)}
-                  </span>
-                </div>
-                <div className="flex-1 text-sm text-[var(--color-text-secondary)]">
-                  <p className="mb-2">
-                    {breachedLines.length > 0
-                      ? `${breachedLines.length} line item${breachedLines.length > 1 ? 's' : ''} exceed${breachedLines.length === 1 ? 's' : ''} the discount ceiling for this customer's tier (${quotation.customer_tier_display}).`
-                      : 'Blended overage across all lines triggers approval threshold.'}
-                  </p>
-                  <p className="text-xs text-[var(--color-text-muted)]">
-                    Required approval: <strong>{quotation.approval_level_display}</strong>
-                  </p>
-                </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+              <div className={`p-4 rounded-xl border shrink-0 text-center min-w-[140px] ${
+                riskScore >= 5 ? 'bg-rose-50 border-rose-200 text-danger' :
+                riskScore > 0 ? 'bg-amber-50 border-amber-200 text-warning' :
+                'bg-emerald-50 border-emerald-200 text-success'
+              }`}>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Blended Risk</div>
+                <div className="font-outfit text-3xl font-extrabold">{riskScore.toFixed(2)}</div>
+                <span className={`badge ${getRiskBadgeClass(quotation.blended_risk_score)} mt-1.5`}>
+                  {getRiskLabel(quotation.blended_risk_score)}
+                </span>
               </div>
 
-              {/* Per-line breakdown */}
-              {lineDetails.length > 0 && (
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-[var(--color-canvas)]">
-                      <th className="text-label-uppercase text-left px-3 py-2 border-b border-[var(--color-border)]">Product</th>
-                      <th className="text-label-uppercase text-left px-3 py-2 border-b border-[var(--color-border)]">Category</th>
-                      <th className="text-label-uppercase text-right px-3 py-2 border-b border-[var(--color-border)]">Discount</th>
-                      <th className="text-label-uppercase text-right px-3 py-2 border-b border-[var(--color-border)]">Ceiling</th>
-                      <th className="text-label-uppercase text-right px-3 py-2 border-b border-[var(--color-border)]">Overage</th>
-                      <th className="text-label-uppercase text-right px-3 py-2 border-b border-[var(--color-border)]">Line Value</th>
-                      <th className="text-label-uppercase text-center px-3 py-2 border-b border-[var(--color-border)]">Policy</th>
+              <div className="text-xs text-slate-600 leading-relaxed">
+                <p className="font-medium mb-1">
+                  {breachedLines.length > 0
+                    ? `${breachedLines.length} line item${breachedLines.length > 1 ? 's exceed' : ' exceeds'} the allowable discount ceiling for this customer's tier (${quotation.customer_tier_display}).`
+                    : 'Blended margin overage across all quotation lines triggers the Deal Desk threshold.'}
+                </p>
+                <div className="flex items-center space-x-2 mt-2">
+                  <span className="text-[11px] text-slate-400">Required Approval Pathway:</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary-light text-primary border border-primary/20">
+                    {quotation.approval_level_display}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Per-line breakdown table */}
+            {lineDetails.length > 0 && (
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-2.5">Product</th>
+                      <th className="px-4 py-2.5">Category</th>
+                      <th className="px-4 py-2.5 text-right">Discount</th>
+                      <th className="px-4 py-2.5 text-right">Ceiling</th>
+                      <th className="px-4 py-2.5 text-right">Overage</th>
+                      <th className="px-4 py-2.5 text-right">Line Value</th>
+                      <th className="px-4 py-2.5 text-center">Status</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {lineDetails.map((line) => (
-                      <tr key={line.line_id} className={`border-b border-[var(--color-surface-alt)] ${
-                        line.policy_status === 'over_limit' ? 'bg-[var(--color-rose-bg)]/30' : ''
-                      }`}>
-                        <td className="px-3 py-2 text-sm font-medium">{line.product_name}</td>
-                        <td className="px-3 py-2 text-sm text-[var(--color-text-muted)]">{line.category_name}</td>
-                        <td className="px-3 py-2 text-right font-mono text-sm">{formatPercent(line.discount_percent)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-sm text-[var(--color-text-muted)]">{formatPercent(line.ceiling)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-sm font-semibold">
-                          {parseFloat(line.overage) > 0
-                            ? <span className="text-[var(--color-rose)]">+{formatPercent(line.overage)}</span>
-                            : <span className="text-[var(--color-text-disabled)]">—</span>
-                          }
+                      <tr key={line.line_id} className={`hover:bg-slate-50/50 ${line.policy_status === 'over_limit' ? 'bg-rose-50/30' : ''}`}>
+                        <td className="px-4 py-2.5 font-semibold text-slate-900">{line.product_name}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{line.category_name}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-800">{formatPercent(line.discount_percent)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-slate-400">{formatPercent(line.ceiling)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold">
+                          {parseFloat(line.overage) > 0 ? (
+                            <span className="text-danger">+{formatPercent(line.overage)}</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
                         </td>
-                        <td className="px-3 py-2 text-right font-mono text-sm">{formatCurrency(line.line_value)}</td>
-                        <td className="px-3 py-2 text-center">
-                          {line.policy_status === 'over_limit'
-                            ? <span className="badge badge-high-risk"><span className="badge-dot" />BREACH</span>
-                            : <span className="badge badge-approved"><span className="badge-dot" />OK</span>
-                          }
+                        <td className="px-4 py-2.5 text-right font-mono text-slate-700">{formatCurrency(line.line_value)}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          {line.policy_status === 'over_limit' ? (
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-danger-light text-danger border border-danger/20">
+                              BREACH
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-success-light text-success border border-success/20">
+                              OK
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Quote Line Item Valuation */}
-          <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1">
-            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[var(--color-primary)]" />
-              <h2 className="text-title-sm">Quote Line Item Valuation</h2>
+          {/* Line Items Valuation Table */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-premium overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center space-x-2">
+              <FileText className="h-4 w-4 text-primary" />
+              <h3 className="font-outfit text-sm font-bold text-slate-900">Quotation Line Items & Valuation</h3>
             </div>
-            <table className="w-full">
-              <thead>
-                <tr className="bg-[var(--color-canvas)]">
-                  <th className="text-label-uppercase text-left px-4 py-2 border-b border-[var(--color-border)]">Product</th>
-                  <th className="text-label-uppercase text-center px-4 py-2 border-b border-[var(--color-border)]">Qty</th>
-                  <th className="text-label-uppercase text-right px-4 py-2 border-b border-[var(--color-border)]">Unit Price</th>
-                  <th className="text-label-uppercase text-right px-4 py-2 border-b border-[var(--color-border)]">Discount</th>
-                  <th className="text-label-uppercase text-right px-4 py-2 border-b border-[var(--color-border)]">Net Price</th>
-                  <th className="text-label-uppercase text-right px-4 py-2 border-b border-[var(--color-border)]">Line Total</th>
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3">Product</th>
+                  <th className="px-6 py-3 text-center">Qty</th>
+                  <th className="px-6 py-3 text-right">Unit Price</th>
+                  <th className="px-6 py-3 text-right">Discount</th>
+                  <th className="px-6 py-3 text-right">Net Price</th>
+                  <th className="px-6 py-3 text-right">Line Total</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {quotation.lines.map(line => (
-                  <tr key={line.id} className="border-b border-[var(--color-surface-alt)] hover:bg-[var(--color-canvas)] transition-colors">
-                    <td className="px-4 py-2.5">
-                      <div className="text-sm font-medium">{line.product_name}</div>
-                      <div className="text-xs text-[var(--color-text-muted)]">{line.product_sku} • {line.category_name}</div>
+                  <tr key={line.id} className="hover:bg-slate-50/50">
+                    <td className="px-6 py-3">
+                      <div className="font-semibold text-slate-900">{line.product_name}</div>
+                      <div className="text-[10px] text-slate-400">{line.product_sku} • {line.category_name}</div>
                     </td>
-                    <td className="px-4 py-2.5 text-center font-mono text-sm">{line.quantity}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-sm">{formatCurrency(line.unit_price)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-sm">
-                      <span className={parseFloat(line.discount_percent) > 0 ? 'text-[var(--color-rose)]' : ''}>
+                    <td className="px-6 py-3 text-center font-mono font-medium text-slate-700">{line.quantity}</td>
+                    <td className="px-6 py-3 text-right font-mono text-slate-700">{formatCurrency(line.unit_price)}</td>
+                    <td className="px-6 py-3 text-right font-mono">
+                      <span className={parseFloat(line.discount_percent) > 0 ? 'text-danger font-bold' : 'text-slate-400'}>
                         {formatPercent(line.discount_percent)}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-sm">{formatCurrency(line.net_price)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-sm font-semibold">{formatCurrency(line.line_total)}</td>
+                    <td className="px-6 py-3 text-right font-mono text-slate-700">{formatCurrency(line.net_price)}</td>
+                    <td className="px-6 py-3 text-right font-mono font-bold text-slate-900">{formatCurrency(line.line_total)}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="bg-[var(--color-canvas)] font-semibold">
-                  <td colSpan={5} className="px-4 py-2.5 text-right text-sm">Grand Total</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-sm">{formatCurrency(quotation.total)}</td>
+              <tfoot className="bg-slate-50 border-t border-slate-200 font-bold">
+                <tr>
+                  <td colSpan={5} className="px-6 py-3 text-right text-slate-700 uppercase tracking-wider text-[10px]">Grand Total</td>
+                  <td className="px-6 py-3 text-right font-mono font-outfit text-sm text-slate-900">{formatCurrency(quotation.total)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
 
           {/* Deal Economics & Margin */}
-          <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="w-4 h-4 text-[var(--color-primary)]" />
-              <h2 className="text-title-sm">Deal Economics & Margin</h2>
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium">
+            <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-4">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <h3 className="font-outfit text-sm font-bold text-slate-900">Deal Economics & Margin Analysis</h3>
             </div>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
-                <div className="text-xs text-[var(--color-text-muted)] mb-0.5">GROSS VALUE</div>
-                <div className="font-mono text-lg font-bold">{formatCurrency(quotation.gross_total)}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gross Value</div>
+                <div className="font-outfit text-lg font-bold text-slate-900 mt-0.5">{formatCurrency(quotation.gross_total)}</div>
               </div>
               <div>
-                <div className="text-xs text-[var(--color-text-muted)] mb-0.5">TOTAL DISCOUNT</div>
-                <div className="font-mono text-lg font-bold text-[var(--color-rose)]">-{formatCurrency(quotation.total_discount_amount)}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Discount</div>
+                <div className="font-outfit text-lg font-bold text-danger mt-0.5">-{formatCurrency(quotation.total_discount_amount)}</div>
               </div>
               <div>
-                <div className="text-xs text-[var(--color-text-muted)] mb-0.5">BLENDED DISCOUNT %</div>
-                <div className="font-mono text-lg font-bold">{formatPercent(quotation.blended_discount_percent)}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Blended Discount</div>
+                <div className="font-outfit text-lg font-bold text-slate-900 mt-0.5">{formatPercent(quotation.blended_discount_percent)}</div>
               </div>
               <div>
-                <div className="text-xs text-[var(--color-text-muted)] mb-0.5">BLENDED MARGIN %</div>
-                <div className={`font-mono text-lg font-bold ${
-                  parseFloat(quotation.blended_margin_percent) > 30 ? 'text-[var(--color-emerald)]' : 'text-[var(--color-amber)]'
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Realized Margin</div>
+                <div className={`font-outfit text-lg font-bold mt-0.5 ${
+                  parseFloat(quotation.blended_margin_percent) > 30 ? 'text-success' : 'text-warning'
                 }`}>
                   {formatPercent(quotation.blended_margin_percent)}
                 </div>
@@ -272,72 +297,71 @@ export function ApprovalDetailPage() {
           </div>
 
           {/* Governance History & Revision Log */}
-          <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1">
-            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[var(--color-text-muted)]" />
-              <h2 className="text-title-sm">Governance History & Revision Log</h2>
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium">
+            <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-5">
+              <Clock className="h-4 w-4 text-slate-500" />
+              <h3 className="font-outfit text-sm font-bold text-slate-900">Audit History & Governance Log</h3>
             </div>
-            <div className="p-4">
-              {quotation.approval_logs.length === 0 ? (
-                <p className="text-sm text-[var(--color-text-muted)] italic">No audit trail entries yet.</p>
-              ) : (
-                <div className="space-y-3">
+            {quotation.approval_logs.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No previous audit trail entries for this quotation.</p>
+            ) : (
+              <div className="flow-root">
+                <ul className="-mb-8">
                   {quotation.approval_logs.map((log, i) => (
-                    <div key={log.id} className="flex items-start gap-3">
-                      {/* Timeline dot */}
-                      <div className="flex flex-col items-center">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                          log.action === 'approved' ? 'bg-[var(--color-emerald-bg)] text-[var(--color-emerald)]' :
-                          log.action === 'rejected' ? 'bg-[var(--color-rose-bg)] text-[var(--color-rose)]' :
-                          log.action === 'returned' ? 'bg-[var(--color-amber-bg)] text-[var(--color-amber)]' :
-                          'bg-[var(--color-indigo-bg)] text-[var(--color-indigo)]'
-                        }`}>
-                          {log.action === 'approved' ? <CheckCircle2 className="w-4 h-4" /> :
-                           log.action === 'rejected' ? <XCircle className="w-4 h-4" /> :
-                           log.action === 'returned' ? <RotateCcw className="w-4 h-4" /> :
-                           <Shield className="w-4 h-4" />}
+                    <li key={log.id}>
+                      <div className="relative pb-6">
+                        {i !== quotation.approval_logs.length - 1 ? (
+                          <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-slate-200" aria-hidden="true" />
+                        ) : null}
+                        <div className="relative flex space-x-3">
+                          <div>
+                            <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${
+                              log.action === 'approved' ? 'bg-success-light text-success' :
+                              log.action === 'rejected' ? 'bg-danger-light text-danger' :
+                              log.action === 'returned' ? 'bg-warning-light text-warning' :
+                              'bg-primary-light text-primary'
+                            }`}>
+                              {log.action === 'approved' ? <CheckCircle2 className="w-4 h-4" /> :
+                               log.action === 'rejected' ? <XCircle className="w-4 h-4" /> :
+                               log.action === 'returned' ? <RotateCcw className="w-4 h-4" /> :
+                               <Shield className="w-4 h-4" />}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0 pt-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-bold text-slate-900">{log.action_display}</span>
+                              <span className="text-[11px] text-slate-500">by {log.actor_name || log.actor_username} ({log.role_at_action})</span>
+                            </div>
+                            {log.reason && (
+                              <p className="text-xs text-slate-600 mt-1 italic bg-slate-50 p-2 rounded border border-slate-100">
+                                "{log.reason}"
+                              </p>
+                            )}
+                            <div className="mt-1 text-[10px] text-slate-400">
+                              {formatDateTime(log.timestamp)} • Risk at decision: {parseFloat(log.blended_risk_score_at_action).toFixed(2)}
+                            </div>
+                          </div>
                         </div>
-                        {i < quotation.approval_logs.length - 1 && (
-                          <div className="w-px h-6 bg-[var(--color-border)] mt-1" />
-                        )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">{log.action_display}</span>
-                          <span className="text-xs text-[var(--color-text-muted)]">by {log.actor_name || log.actor_username}</span>
-                          <span className="text-xs text-[var(--color-text-disabled)]">({log.role_at_action})</span>
-                        </div>
-                        {log.reason && (
-                          <p className="text-sm text-[var(--color-text-secondary)] mt-0.5">"{log.reason}"</p>
-                        )}
-                        <div className="flex items-center gap-3 mt-0.5 text-xs text-[var(--color-text-muted)]">
-                          <span>{formatDateTime(log.timestamp)}</span>
-                          <span>Risk Score at action: {parseFloat(log.blended_risk_score_at_action).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </div>
+                    </li>
                   ))}
-                </div>
-              )}
-            </div>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right Sidebar */}
-        <div className="space-y-4">
-          {/* Multi-Tier Approval Pathway */}
-          <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1 p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Shield className="w-4 h-4 text-[var(--color-primary)]" />
-              <h3 className="text-title-sm">Multi-Tier Approval Pathway</h3>
+        <div className="space-y-6">
+          {/* Multi-Tier Pathway */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium">
+            <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-4">
+              <Shield className="h-4 w-4 text-primary" />
+              <h3 className="font-outfit text-sm font-bold text-slate-900">Approval Pathway Steps</h3>
             </div>
             <div className="space-y-3">
               {[
-                {
-                  label: 'Submitted by Rep',
-                  detail: quotation.sales_rep_name,
-                  done: true,
-                },
+                { label: 'Submitted by Rep', detail: quotation.sales_rep_name, done: true },
                 {
                   label: 'Sales Manager Review',
                   detail: quotation.manager_approved ? 'Approved' : (isPending ? 'Awaiting Review' : '—'),
@@ -354,82 +378,88 @@ export function ApprovalDetailPage() {
                   skipped: quotation.required_approval_level !== 'manager_finance',
                 },
                 {
-                  label: 'Final Status',
-                  detail: quotation.status === 'approved' ? 'Approved — ready for fulfillment'
-                    : quotation.status === 'rejected' ? 'Rejected'
-                    : quotation.status === 'confirmed' ? 'Confirmed'
-                    : 'Pending',
+                  label: 'Fulfillment Ready',
+                  detail: quotation.status === 'approved' ? 'Ready for conversion' : 'Pending',
                   done: quotation.status === 'approved' || quotation.status === 'confirmed',
                 },
               ].map((step, i) => (
-                <div key={i} className={`flex items-start gap-3 p-2.5 rounded ${step.active ? 'bg-[var(--color-primary-light)] border border-[var(--color-primary-ring)]' : ''}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                    step.done ? 'bg-[var(--color-emerald)] text-white' :
-                    step.active ? 'bg-[var(--color-primary)] text-white animate-pulse' :
-                    step.skipped ? 'bg-[var(--color-surface-alt)] text-[var(--color-text-disabled)]' :
-                    'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] border border-[var(--color-border)]'
+                <div
+                  key={i}
+                  className={`flex items-start space-x-3 p-3 rounded-lg border transition-all ${
+                    step.active
+                      ? 'bg-blue-50/50 border-primary/30 ring-1 ring-primary/20'
+                      : 'border-slate-100 bg-slate-50/50'
+                  }`}
+                >
+                  <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    step.done ? 'bg-success text-white' :
+                    step.active ? 'bg-primary text-white animate-pulse' :
+                    step.skipped ? 'bg-slate-200 text-slate-400' :
+                    'bg-slate-200 text-slate-600'
                   }`}>
                     {step.done ? '✓' : step.skipped ? '—' : i + 1}
                   </div>
                   <div>
-                    <div className={`text-sm font-medium ${step.active ? 'text-[var(--color-primary)]' : step.skipped ? 'text-[var(--color-text-disabled)]' : ''}`}>
+                    <div className={`text-xs font-bold ${step.active ? 'text-primary' : 'text-slate-800'}`}>
                       {step.label}
                     </div>
-                    <div className="text-xs text-[var(--color-text-muted)]">{step.detail}</div>
+                    <div className="text-[10px] text-slate-500">{step.detail}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Manager Decision Memorandum — only if pending */}
+          {/* Decision Memorandum Panel */}
           {isPending && (
-            <div className="bg-white border-2 border-[var(--color-primary)] rounded-md elevation-2 p-4">
-              <h3 className="text-title-sm mb-3 flex items-center gap-2">
-                <User className="w-4 h-4 text-[var(--color-primary)]" />
-                Manager Decision Memorandum
-              </h3>
+            <div className="rounded-xl border border-primary/30 bg-white p-6 shadow-premium space-y-4">
+              <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
+                <MessageSquare className="h-4 w-4 text-primary" />
+                <h3 className="font-outfit text-sm font-bold text-slate-900">Decision Memorandum</h3>
+              </div>
 
-              <div className="mb-3">
-                <label className="text-label-uppercase block mb-1">Rationale / Comments</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                  Mandatory Audit Rationale
+                </label>
                 <textarea
                   value={reason}
                   onChange={e => setReason(e.target.value)}
                   rows={3}
-                  placeholder="Enter your reasoning for this decision..."
-                  className="w-full px-3 py-2 border border-[var(--color-border-muted)] rounded text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/15 resize-none"
+                  placeholder="Enter policy justification, counter-offer details, or rejection reasons..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary focus:bg-white transition-all resize-none"
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2">
                 <button
                   onClick={() => approveMutation.mutate()}
                   disabled={approveMutation.isPending}
-                  className="w-full flex items-center justify-center gap-2 h-10 bg-[var(--color-emerald)] hover:bg-[#047857] text-white font-semibold rounded transition disabled:opacity-50"
+                  className="w-full flex items-center justify-center space-x-2 rounded-lg bg-success hover:bg-success-hover py-2.5 text-xs font-bold text-white shadow-sm transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {approveMutation.isPending ? 'Processing...' : 'Approve Quotation'}
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>{approveMutation.isPending ? 'Processing...' : 'Approve Quotation'}</span>
                 </button>
                 <button
                   onClick={() => returnMutation.mutate()}
                   disabled={returnMutation.isPending}
-                  className="w-full flex items-center justify-center gap-2 h-10 bg-white border border-[var(--color-amber)] text-[var(--color-amber-text)] font-semibold rounded hover:bg-[var(--color-amber-bg)] transition disabled:opacity-50"
+                  className="w-full flex items-center justify-center space-x-2 rounded-lg border border-warning text-warning hover:bg-warning-light py-2 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  {returnMutation.isPending ? 'Processing...' : 'Return for Revision'}
+                  <RotateCcw className="h-4 w-4" />
+                  <span>{returnMutation.isPending ? 'Processing...' : 'Return for Revision'}</span>
                 </button>
                 <button
                   onClick={() => rejectMutation.mutate()}
                   disabled={rejectMutation.isPending}
-                  className="w-full flex items-center justify-center gap-2 h-10 bg-white border border-[var(--color-rose)] text-[var(--color-rose-text)] font-semibold rounded hover:bg-[var(--color-rose-bg)] transition disabled:opacity-50"
+                  className="w-full flex items-center justify-center space-x-2 rounded-lg border border-danger text-danger hover:bg-danger-light py-2 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <XCircle className="w-4 h-4" />
-                  {rejectMutation.isPending ? 'Processing...' : 'Reject Quotation'}
+                  <XCircle className="h-4 w-4" />
+                  <span>{rejectMutation.isPending ? 'Processing...' : 'Reject Quotation'}</span>
                 </button>
               </div>
 
               {(approveMutation.isError || rejectMutation.isError || returnMutation.isError) && (
-                <div className="mt-3 p-2 bg-[var(--color-rose-bg)] border border-[var(--color-rose-border)] rounded text-xs text-[var(--color-rose-text)]">
+                <div className="p-3 text-[10px] font-bold text-danger bg-danger-light border border-danger/20 rounded-lg">
                   {(approveMutation.error || rejectMutation.error || returnMutation.error)?.message}
                 </div>
               )}
@@ -437,29 +467,30 @@ export function ApprovalDetailPage() {
           )}
 
           {/* Deal Summary */}
-          <div className="bg-white border border-[var(--color-border)] rounded-md elevation-1 p-4">
-            <h3 className="text-title-sm mb-3">Deal Summary</h3>
-            <div className="space-y-2 text-sm">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-premium space-y-3">
+            <h3 className="font-outfit text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
+              Contract Metadata
+            </h3>
+            <div className="space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-[var(--color-text-muted)]">Customer</span>
-                <span className="font-medium">{quotation.customer_name}</span>
+                <span className="text-slate-400">Customer:</span>
+                <span className="font-semibold text-slate-800">{quotation.customer_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--color-text-muted)]">Tier</span>
-                <span className="font-medium">{quotation.customer_tier_display}</span>
+                <span className="text-slate-400">Tier:</span>
+                <span className="font-semibold text-slate-800">{quotation.customer_tier_display}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--color-text-muted)]">Line Items</span>
-                <span className="font-mono">{quotation.lines.length}</span>
+                <span className="text-slate-400">Line Items:</span>
+                <span className="font-mono font-bold text-slate-800">{quotation.lines.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--color-text-muted)]">Payment Terms</span>
-                <span className="font-medium">{quotation.payment_terms}</span>
+                <span className="text-slate-400">Payment Terms:</span>
+                <span className="font-semibold text-slate-800">{quotation.payment_terms}</span>
               </div>
-              <hr className="border-[var(--color-border)]" />
-              <div className="flex justify-between font-semibold">
-                <span>Grand Total</span>
-                <span className="font-mono">{formatCurrency(quotation.total)}</span>
+              <div className="border-t border-slate-100 pt-2 flex justify-between font-bold">
+                <span className="text-slate-700">Grand Total:</span>
+                <span className="font-outfit text-sm text-primary font-extrabold">{formatCurrency(quotation.total)}</span>
               </div>
             </div>
           </div>

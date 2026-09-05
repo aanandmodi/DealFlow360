@@ -4,6 +4,9 @@ Root router includes each app's urls.py under /api/.
 """
 from django.contrib import admin
 from django.urls import path, include
+from core.configuration import configuration
+from core.reporting import reports, quotation_pdf, nudge
+from core.views import health_view
 
 # Customize Django Admin header
 admin.site.site_header = 'DealFlow360 Administration'
@@ -22,4 +25,13 @@ urlpatterns = [
     path('api/', include('billing.urls')),
     # Portal & Dashboard endpoints (Person C — portal app)
     path('api/', include('portal.urls')),
+    # Reports & exports
+    path('api/reports/', reports),
+    path('api/quotations/<int:pk>/pdf/', quotation_pdf),
+    path('api/quotations/<int:pk>/nudge/', nudge),
+    # Dynamic configuration API
+    path('api/config/<str:resource>/', configuration),
+    path('api/config/<str:resource>/<int:pk>/', configuration),
+    # Health check
+    path('api/health/', health_view),
 ]

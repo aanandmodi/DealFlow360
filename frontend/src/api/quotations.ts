@@ -176,9 +176,24 @@ export const quotationsApi = {
     };
   },
 
-  customers: () => ApiClient.get<Customer[]>('/customers/'),
+  customers: async () => {
+    const raw = await ApiClient.get<any>('/customers/');
+    return Array.isArray(raw) ? raw : (raw?.results || []);
+  },
 
-  products: (category?: string) =>
-    ApiClient.get<Product[]>(`/products/${category ? `?category=${category}` : ''}`),
+  products: async (category?: string) => {
+    const raw = await ApiClient.get<any>(`/products/${category ? `?category=${category}` : ''}`);
+    return Array.isArray(raw) ? raw : (raw?.results || []);
+  },
+
+  discountTiers: async () => {
+    const raw = await ApiClient.get<any>('/quotations/discount-tiers/');
+    return Array.isArray(raw) ? raw : (raw?.results || []);
+  },
+
+  approvalRules: async () => {
+    const raw = await ApiClient.get<any>('/quotations/approval-rules/');
+    return Array.isArray(raw) ? raw : (raw?.results || []);
+  },
 };
 

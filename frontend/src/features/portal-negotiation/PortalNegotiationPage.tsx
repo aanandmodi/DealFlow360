@@ -174,7 +174,29 @@ export function PortalNegotiationPage() {
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
+    if (quotation?.id) {
+      try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch(`/api/quotations/${quotation.id}/pdf/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${quotation.quote_number || `Q-${quotation.id}`}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          return;
+        }
+      } catch (e) {
+        console.warn('Backend PDF generation failed, falling back to browser print:', e);
+      }
+    }
     window.print();
   };
 

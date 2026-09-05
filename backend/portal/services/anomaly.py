@@ -1,3 +1,4 @@
+from core.access import scoped_quotes
 """
 Anomaly detection and deal health services.
 Simplified for the 18-hour hackathon build.
@@ -8,7 +9,7 @@ from datetime import timedelta
 from django.conf import settings
 
 
-def get_stalled_deals(threshold_days=None):
+def get_stalled_deals(threshold_days=None, user=None):
     """
     Quotations with no status change in N configured days.
     'Stalled' = no update to updated_at in N days while still in an active status.
@@ -21,7 +22,7 @@ def get_stalled_deals(threshold_days=None):
     cutoff = timezone.now() - timedelta(days=threshold_days)
     active_statuses = ['draft', 'pending_approval', 'sent', 'under_negotiation']
 
-    stalled = Quotation.objects.filter(
+    stalled = (scoped_quotes(user) if user else Quotation.objects.all()).filter(
         status__in=active_statuses,
         updated_at__lt=cutoff,
     ).select_related('customer', 'rep').order_by('updated_at')
@@ -46,22 +47,22 @@ def get_stalled_deals(threshold_days=None):
     return results
 
 
-def get_discount_anomalies(threshold_pct=None):
+def get_discount_anomalies(threshold_pct=None, user=None):
     """
     Flag discounts that are significantly above a rep's historical average.
-    Anomaly = line discount > (rep's avg discount + configurable threshold).
     """
     from quotations.models import Quotation, QuotationLine
 
     if threshold_pct is None:
         threshold_pct = getattr(settings, 'DISCOUNT_ANOMALY_THRESHOLD_PCT', 5.0)
 
-    # Get each rep's average discount
     from django.contrib.auth import get_user_model
     User = get_user_model()
 
     anomalies = []
     reps = User.objects.filter(role='sales_rep')
+    if user and user.role == 'sales_rep':
+        reps = reps.filter(pk=user.pk)
 
     for rep in reps:
         avg_discount = QuotationLine.objects.filter(
@@ -69,7 +70,6 @@ def get_discount_anomalies(threshold_pct=None):
             discount_pct__gt=0,
         ).aggregate(avg=Avg('discount_pct'))['avg'] or 0
 
-        # Find lines where discount significantly exceeds rep's average
         flagged_lines = QuotationLine.objects.filter(
             quotation__rep=rep,
             discount_pct__gt=float(avg_discount) + threshold_pct,
@@ -96,7 +96,7 @@ def get_discount_anomalies(threshold_pct=None):
     return anomalies
 
 
-def get_delivery_slippage():
+def get_delivery_slippage(user=None):
     """
     Fulfillment splits where today > promised_ship_date AND status != shipped/delivered.
     """
@@ -108,6 +108,8 @@ def get_delivery_slippage():
         status__in=['suggested', 'accepted', 'overridden'],
     ).select_related('quotation__customer', 'warehouse', 'product')
 
+    if user:
+        slipped = slipped.filter(quotation__in=scoped_quotes(user))
     results = []
     for split in slipped:
         days_late = (today - split.promised_ship_date).days
@@ -126,12 +128,12 @@ def get_delivery_slippage():
     return results
 
 
-def get_dashboard_summary():
+def get_dashboard_summary(user=None):
     """Aggregate KPI metrics for the Deal Health dashboard."""
     from quotations.models import Quotation, QuotationLine
     from django.db.models import Sum, Avg, Count
 
-    all_quotes = Quotation.objects.all()
+    all_quotes = scoped_quotes(user) if user else Quotation.objects.all()
     active_statuses = ['draft', 'pending_approval', 'approved', 'sent', 'under_negotiation']
 
     active_qs = all_quotes.filter(status__in=active_statuses)
@@ -148,9 +150,9 @@ def get_dashboard_summary():
         avg_margin = round(sum(margins) / len(margins), 1)
 
     # Stalled and anomalies count
-    stalled = get_stalled_deals()
-    anomalies = get_discount_anomalies()
-    slippage = get_delivery_slippage()
+    stalled = get_stalled_deals(user=user)
+    anomalies = get_discount_anomalies(user=user)
+    slippage = get_delivery_slippage(user=user)
 
     # Closed won
     closed = all_quotes.filter(status__in=['confirmed', 'paid', 'invoiced'])
