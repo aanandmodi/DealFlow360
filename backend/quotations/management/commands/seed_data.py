@@ -70,7 +70,7 @@ class Command(BaseCommand):
         finance.set_password('demo123')
         finance.save()
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Users created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Users created'))
 
         # === Product Categories ===
         hw_cat, _ = ProductCategory.objects.get_or_create(name='Hardware', defaults={'description': 'Physical hardware products'})
@@ -78,7 +78,7 @@ class Command(BaseCommand):
         war_cat, _ = ProductCategory.objects.get_or_create(name='Warranty', defaults={'description': 'Extended warranty and SLA plans'})
         sub_cat, _ = ProductCategory.objects.get_or_create(name='Subscription', defaults={'description': 'Recurring subscription products'})
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Product categories created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Product categories created'))
 
         # === Products ===
         laptop, _ = Product.objects.get_or_create(
@@ -121,7 +121,7 @@ class Command(BaseCommand):
             defaults={'name': 'Cloud Backup & Recovery Service', 'category': sub_cat, 'base_price': 29.99, 'unit': 'monthly', 'tax_rate': 0, 'is_subscription': True},
         )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Products created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Products created'))
 
         # === Customers ===
         acme, _ = Customer.objects.get_or_create(
@@ -145,7 +145,7 @@ class Command(BaseCommand):
             defaults={'name': 'Vanguard FinTech Group', 'company': 'Vanguard FinTech', 'tier': 'gold', 'phone': '+1-555-0500'},
         )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Customers created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Customers created'))
 
         # === Discount Tiers ===
         bronze_tier, _ = DiscountTier.objects.get_or_create(
@@ -161,7 +161,7 @@ class Command(BaseCommand):
             defaults={'name': 'Gold', 'max_discount_percent': 15},
         )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Discount tiers created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Discount tiers created'))
 
         # === Category Discount Ceilings ===
         # Hardware gets full tier ceiling, Services gets lower
@@ -183,7 +183,7 @@ class Command(BaseCommand):
                 defaults={'max_discount_percent': war_ceil},
             )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Category discount ceilings created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Category discount ceilings created'))
 
         # === Approval Chains ===
         ApprovalChain.objects.get_or_create(
@@ -195,7 +195,7 @@ class Command(BaseCommand):
             defaults={'min_overage_threshold': 5, 'max_overage_threshold': 100, 'requires_finance': True},
         )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Approval chains created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Approval chains created'))
 
         # === Warehouses ===
         main_wh, _ = Warehouse.objects.get_or_create(
@@ -207,7 +207,7 @@ class Command(BaseCommand):
             defaults={'location': 'New York, NY', 'shipping_cost_weight': 1.2},
         )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Warehouses created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Warehouses created'))
 
         # === Stock Levels ===
         for product, main_qty, east_qty in [
@@ -228,7 +228,7 @@ class Command(BaseCommand):
                 defaults={'quantity': east_qty, 'reorder_point': 5},
             )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Stock levels created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Stock levels created'))
 
         # === Subscription Plans ===
         SubscriptionPlan.objects.get_or_create(
@@ -240,7 +240,7 @@ class Command(BaseCommand):
             defaults={'product': cloud_backup, 'interval': 'monthly', 'price': 29.99},
         )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Subscription plans created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Subscription plans created'))
 
         # === Upsell Rules ===
         UpsellRule.objects.get_or_create(
@@ -260,9 +260,9 @@ class Command(BaseCommand):
             defaults={'margin_threshold': 10, 'promotion_tag': 'Recommended'},
         )
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Upsell rules created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Upsell rules created'))
 
-        self.stdout.write(self.style.SUCCESS('\n✅ Seed data loaded successfully!'))
+        self.stdout.write(self.style.SUCCESS('\n[SUCCESS] Seed data loaded successfully!'))
         self.stdout.write('\nDemo accounts:')
         self.stdout.write('  admin/admin123 — Admin (superuser)')
         self.stdout.write('  elena.vance/demo123 — Sales Rep')

@@ -68,17 +68,46 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dealflow360.wsgi.application'
 
-# === Database (PostgreSQL via docker-compose) ===
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'dealflow360'),
-        'USER': os.getenv('DB_USER', 'dealflow360'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'dealflow360_secret'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+# === Database (PostgreSQL with auto SQLite fallback) ===
+USE_SQLITE = os.getenv('USE_SQLITE', 'auto').lower()
+
+if USE_SQLITE in ('1', 'true', 'yes', 'sqlite'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    import socket
+    pg_host = os.getenv('DB_HOST', 'localhost')
+    pg_port = int(os.getenv('DB_PORT', '5432'))
+    pg_available = False
+    try:
+        sock = socket.create_connection((pg_host, pg_port), timeout=1)
+        sock.close()
+        pg_available = True
+    except OSError:
+        pg_available = False
+
+    if pg_available:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': os.getenv('DB_NAME', 'dealflow360'),
+                'USER': os.getenv('DB_USER', 'dealflow360'),
+                'PASSWORD': os.getenv('DB_PASSWORD', 'dealflow360_secret'),
+                'HOST': pg_host,
+                'PORT': str(pg_port),
+            }
+        }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 # === Auth ===
 AUTH_USER_MODEL = 'core.User'
