@@ -3,6 +3,10 @@ from . import views
 
 urlpatterns = [
     path('quotations/<int:pk>/order-discount/', views.order_discount),
+    # Bulk Importer & Template
+    path('quotations/bulk-import/', views.bulk_import, name='quotation-bulk-import'),
+    path('quotations/bulk-template/', views.bulk_template, name='quotation-bulk-template'),
+
     # Quotations CRUD
     path('quotations/', views.quotation_list, name='quotation-list'),
     path('quotations/create/', views.quotation_create, name='quotation-create'),
@@ -17,6 +21,7 @@ urlpatterns = [
     path('quotations/<int:pk>/return/', views.quotation_return, name='quotation-return'),
     path('quotations/<int:pk>/confirm/', views.quotation_confirm, name='quotation-confirm'),
     path('quotations/<int:pk>/transition/', views.quotation_transition, name='quotation-transition'),
+    path('quotations/<int:pk>/dispatch/', views.quotation_dispatch, name='quotation-dispatch'),
 
     # Risk Score & Audit Logs
     path('quotations/<int:pk>/risk-score/', views.quotation_risk_score, name='quotation-risk-score'),

@@ -679,3 +679,106 @@ def order_discount(request, pk):
     q.lines.update(discount_pct=pct)
     audit_edit(q, request.user)
     return Response(QuotationSerializer(q).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def bulk_import(request):
+    """
+    POST /api/quotations/bulk-import/
+    Payload:
+    {
+        "action": "validate" | "commit",
+        "csv_text": "...", or "rows": [...],
+        "target_quotation_id": null | int
+    }
+    """
+    from .bulk import validate_bulk_payload, commit_bulk_import
+    from django.http import JsonResponse
+
+    data = request.data
+    action = data.get('action', 'validate')
+    raw_payload = data.get('csv_text') if 'csv_text' in data else data.get('rows')
+    target_quote_id = data.get('target_quotation_id')
+
+    if not raw_payload:
+        return Response({'error': 'Payload must contain csv_text or rows.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    val_result = validate_bulk_payload(raw_payload, request.user)
+    if not val_result.get('success'):
+        return Response(val_result, status=status.HTTP_400_BAD_REQUEST)
+
+    if action == 'validate':
+        return Response(val_result, status=status.HTTP_200_OK)
+
+    elif action == 'commit':
+        # If pre-validated rows were passed in directly, use them, otherwise use rows from validation
+        rows_to_commit = val_result.get('rows', [])
+        commit_result = commit_bulk_import(rows_to_commit, request.user, target_quotation_id=target_quote_id)
+        if not commit_result.get('success'):
+            return Response(commit_result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(commit_result, status=status.HTTP_201_CREATED)
+
+    return Response({'error': f"Unknown action '{action}'. Use 'validate' or 'commit'."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def bulk_template(request):
+    """
+    GET /api/quotations/bulk-template/
+    Returns a downloadable CSV template with prefilled active catalog examples.
+    """
+    from django.http import HttpResponse
+    from .bulk import generate_csv_template
+
+    csv_content = generate_csv_template()
+    response = HttpResponse(csv_content, content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="dealflow360_bulk_import_template.csv"'
+    return response
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def quotation_dispatch(request, pk):
+    """
+    GET: Generate dispatch payloads (WhatsApp & Email) for preview.
+    POST: Execute dispatch, record immutable audit log, and optionally advance status to 'sent'.
+    """
+    from .services.dispatch import generate_dispatch_payloads, execute_dispatch
+
+    q = quote_for(request, pk)
+    data = request.query_params if request.method == 'GET' else request.data
+
+    template_type = data.get('template_type', 'standard')
+    custom_note = data.get('custom_note', '')
+    recipient_phone = data.get('phone', data.get('recipient_phone', ''))
+    recipient_email = data.get('email', data.get('recipient_email', ''))
+
+    if request.method == 'GET':
+        payloads = generate_dispatch_payloads(
+            q,
+            custom_note=custom_note,
+            template_type=template_type,
+            recipient_phone=recipient_phone,
+            recipient_email=recipient_email,
+        )
+        return Response(payloads, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        channel = data.get('channel', 'whatsapp')
+        recipient = data.get('recipient', recipient_phone if channel == 'whatsapp' else recipient_email)
+        mark_as_sent = data.get('mark_as_sent', True)
+
+        result = execute_dispatch(
+            quotation=q,
+            channel=channel,
+            recipient=recipient,
+            template_type=template_type,
+            custom_note=custom_note,
+            actor=request.user,
+            mark_as_sent=mark_as_sent,
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+

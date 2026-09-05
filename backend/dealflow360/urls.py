@@ -8,6 +8,8 @@ from core.views import health_view
 from core.intelligence import pricing_scenarios, deal_readiness, inventory_readiness, receive_stock, deal_conversation
 from core.configuration import configuration
 from core.reporting import reports, quotation_pdf, nudge
+from core.copilot import deal_copilot_chat
+from portal.views import verify_quotation_public
 
 # Customize Django Admin header
 admin.site.site_header = 'DealFlow360 Administration'
@@ -26,6 +28,8 @@ urlpatterns = [
     path('api/reports/export/', reports),
     path('api/reports/', reports),
     path('api/quotations/<int:pk>/pdf/', quotation_pdf),
+    path('api/verify/<str:quote_number>/', verify_quotation_public),
+    path('api/copilot/chat/', deal_copilot_chat),
     path('api/quotations/<int:pk>/nudge/', nudge),
     path('admin/', admin.site.urls),
     # Auth endpoints (Person C — core app)

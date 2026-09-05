@@ -1,8 +1,9 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { quotationsApi } from '../../api/quotations';
+import { DealCopilotDrawer } from '../copilot/DealCopilotDrawer';
 import {
   LayoutDashboard,
   FileText,
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   Layers,
   Package,
+  Bot,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -56,6 +58,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [animKey, setAnimKey] = useState(0);
   const [logoSpin, setLogoSpin] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault();
+        setCopilotOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const visible = items.filter((i) => !i.roles || i.roles.includes(user?.role || ''));
   const title = visible.find((i) => location.pathname.startsWith(i.to))?.label || 'Workspace';
@@ -256,6 +270,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              onClick={() => setCopilotOpen(true)}
+              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-xs shadow-xs border border-blue-700 transition-all cursor-pointer shrink-0"
+              style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
+              title="Open AI Deal Copilot (Alt + C)"
+              aria-label="Open AI Deal Copilot"
+            >
+              <Bot size={15} className="text-white shrink-0" />
+              <span className="text-white font-semibold text-xs whitespace-nowrap">AI Deal Copilot</span>
+              <span className="text-[10px] bg-blue-700/80 text-white font-mono px-1.5 py-0.5 rounded leading-none hidden sm:inline">Alt+C</span>
+            </button>
+
+            <button
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200"
               aria-label="Reload Data"
               title="Reload Data (Refreshes pricing, stock, and approval data from backend)"
@@ -302,6 +329,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main id="main-content" className="flex-1 overflow-y-auto p-5 md:p-8">
           <div className="mx-auto max-w-[1500px]">{children}</div>
         </main>
+
+        <DealCopilotDrawer isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
 
         <footer className="border-t border-slate-200 bg-white px-6 py-2 text-[10px] text-slate-500 flex justify-between">
           <span>DealFlow360</span>

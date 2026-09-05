@@ -12,12 +12,16 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { fetchQuotations } from '../../api/quotations';
 import { formatCurrency, formatDate, getStatusBadgeClass } from '../../lib/utils';
-import { PlusCircle, Filter, ExternalLink, RefreshCw, Eye, FileDown } from 'lucide-react';
+import { PlusCircle, Filter, ExternalLink, RefreshCw, Eye, FileDown, FileSpreadsheet, Share2 } from 'lucide-react';
 import { useState } from 'react';
+import { BulkImportModal } from './BulkImportModal';
+import { QuotationDispatchModal } from './QuotationDispatchModal';
 
 export function QuotationListPage() {
-  const [error,setError]=useState<unknown>(null);
+  const [error, setError] = useState<unknown>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [dispatchQuote, setDispatchQuote] = useState<any | null>(null);
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['quotations', statusFilter],
     queryFn: () => fetchQuotations(statusFilter ? { status: statusFilter } : undefined),
@@ -25,11 +29,18 @@ export function QuotationListPage() {
 
   const quotations = data?.results || [];
 
-  const handleDownloadPdf=(id:number,number?:string)=>downloadFile(`/quotations/${id}/pdf/`,`${number||id}.pdf`).catch(e=>setError(e));
+  const handleDownloadPdf = (id: number, number?: string) =>
+    downloadFile(`/quotations/${id}/pdf/`, `${number || id}.pdf`).catch((e) => setError(e));
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Notice error={error}/>
+      <Notice error={error} />
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        onSuccess={() => refetch()}
+      />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div>
@@ -47,6 +58,13 @@ export function QuotationListPage() {
             title="Refresh"
           >
             <RefreshCw className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setIsBulkOpen(true)}
+            className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all cursor-pointer"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-blue-600" />
+            <span>Bulk Import</span>
           </button>
           <Link
             to="/quotations/new"
@@ -162,6 +180,13 @@ export function QuotationListPage() {
                         {q.status === 'pending_approval' ? 'Review' : 'Open'}
                       </Link>
                       <button
+                        onClick={() => setDispatchQuote(q)}
+                        title="Dispatch via WhatsApp / Email"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
                         onClick={() => handleDownloadPdf(q.id, q.quote_number)}
                         title="Download Quotation PDF"
                         className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:bg-slate-50 transition-all cursor-pointer"
@@ -185,6 +210,23 @@ export function QuotationListPage() {
           </table>
         </div>
       </div>
+
+      {/* Dispatch Modal */}
+      {dispatchQuote && (
+        <QuotationDispatchModal
+          isOpen={!!dispatchQuote}
+          onClose={() => setDispatchQuote(null)}
+          quotationId={dispatchQuote.id}
+          quoteNumber={dispatchQuote.quote_number || `Q-${dispatchQuote.id}`}
+          customerName={dispatchQuote.customer_name}
+          customerPhone={(dispatchQuote as any).customer_phone}
+          customerEmail={(dispatchQuote as any).customer_email}
+          onSuccess={() => {
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }
+

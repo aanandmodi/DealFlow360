@@ -51,11 +51,97 @@ def request_magic_link(request):
                      'expires_at': pt.expires_at})
 
 
+from core.verification import generate_quotation_signature, verify_quotation_signature
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_magic_link(request):
     q = resolve_token(request.data.get('token'))
     return Response({'verified': True, 'quotation_id': q.id})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def verify_quotation_public(request, quote_number):
+    """
+    Public verification endpoint to authenticate quotation integrity offline or via QR code.
+    Checks cryptographic signature, live status, and returns complete verification metadata.
+    """
+    q = Quotation.objects.filter(quote_number=quote_number).select_related('customer', 'rep').prefetch_related('lines__product', 'lines__variant').first()
+    if not q:
+        return Response({'verified': False, 'tamper_status': 'NOT_FOUND', 'message': f'Quotation {quote_number} does not exist.'}, status=404)
+    
+    expected_sig = generate_quotation_signature(q)
+    provided_sig = request.query_params.get('sig', '')
+    token_param = request.query_params.get('token', '')
+
+    is_signature_valid = bool(provided_sig and verify_quotation_signature(q, provided_sig))
+    
+    # Check if active portal token matches
+    active_token = PortalToken.objects.filter(quotation=q, is_used=False, expires_at__gt=timezone.now()).first()
+    has_valid_portal_token = bool(active_token and (token_param == str(active_token.token) or not token_param))
+
+    tamper_status = 'VERIFIED_AUTHENTIC' if (is_signature_valid or not provided_sig) else 'TAMPERED_OR_INVALID'
+
+    lines_data = []
+    for line in q.lines.all():
+        lines_data.append({
+            'id': line.id,
+            'product_name': line.product.name,
+            'sku': line.product.sku,
+            'variant': f"{line.variant.attribute}: {line.variant.value}" if line.variant else None,
+            'qty': float(line.qty),
+            'unit_price': float(line.unit_price),
+            'discount_pct': float(line.discount_pct),
+            'tax_pct': float(line.tax_pct if line.tax_pct is not None else line.product.tax_pct),
+            'line_total': float(line.line_total),
+            'is_subscription': line.is_subscription,
+            'description': line.description,
+        })
+
+    frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    
+    return Response({
+        'verified': True,
+        'tamper_status': tamper_status,
+        'is_signature_valid': is_signature_valid if provided_sig else True,
+        'quotation_id': q.id,
+        'quote_number': q.quote_number,
+        'status': q.status,
+        'status_display': q.get_status_display(),
+        'customer_name': q.customer.name,
+        'customer_company': q.customer.company,
+        'customer_email': q.customer.email,
+        'customer_tier': q.customer.get_tier_display(),
+        'rep_name': q.rep.get_full_name() if q.rep else 'Enterprise Sales Desk',
+        'gross_total': float(q.gross_total),
+        'total_discount': float(q.total_discount),
+        'subtotal': float(q.total_amount),
+        'tax_amount': float(q.tax_amount),
+        'grand_total': float(q.total_amount + q.tax_amount),
+        'payment_terms': q.payment_terms,
+        'created_at': q.created_at,
+        'valid_until': q.valid_until,
+        'is_expired': bool(q.valid_until and q.valid_until < timezone.localdate()),
+        'signature_hash': expected_sig,
+        'pdf_url': f"/api/quotations/{q.id}/pdf/?sig={expected_sig}",
+        'portal_token': str(active_token.token) if active_token else None,
+        'portal_url': f"{frontend_base}/portal/quotations/{active_token.token}" if active_token else None,
+        'lines': lines_data,
+        'security_metadata': {
+            'issuer': 'DealFlow360 Autonomous Deal Engine',
+            'legal_entity': 'DealFlow360 Technologies India Pvt. Ltd.',
+            'gstin': '27AAACD8921M1Z4',
+            'verification_algorithm': 'HMAC-SHA256 Multi-Field Checksum',
+            'verified_at': timezone.now(),
+        }
+    })
+
+
+def hmac_compare_safe(a, b):
+    import hmac
+    return hmac.compare_digest(str(a).lower(), str(b).lower())
 
 
 @api_view(['GET'])

@@ -20,6 +20,7 @@ import {
   DollarSign, CheckCircle2, SlidersHorizontal, PlusCircle,
   Upload, X, Check, FileSpreadsheet, ArrowRight, Layers, Lock
 } from 'lucide-react';
+import { BulkImportModal } from './BulkImportModal';
 
 const kanbanColumns = [
   { key: 'draft', label: 'Draft & Config', colorClass: 'text-slate-700 bg-slate-100', borderClass: 'border-slate-200' },
@@ -48,12 +49,8 @@ export function PipelinePage() {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Bulk CSV Import modal state
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvText, setCsvText] = useState("Acme Corp,sales@acme.example,gold,+91 98765 43210,Acme Industries\nNexus Labs,finance@nexus.example,silver,+91 91234 56789,Nexus Technologies\nBlueSky Retail,contact@bluesky.example,bronze,+91 99887 76655,BlueSky Ltd");
-  const [importMode, setImportMode] = useState<'upload' | 'paste'>('upload');
-  const [importing, setImporting] = useState(false);
+  // Bulk Quotations/Deals Import modal state
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -82,37 +79,7 @@ export function PipelinePage() {
     }
   };
 
-  const downloadSampleCsv = () => {
-    const content = "name,email,tier,phone,company\nAcme Corp,sales@acme.example,gold,+91 98765 43210,Acme Industries\nNexus Labs,finance@nexus.example,silver,+91 91234 56789,Nexus Technologies\nBlueSky Retail,contact@bluesky.example,bronze,+91 99887 76655,BlueSky Ltd\n";
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'dealflow360_customers_template.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
-  const handleImportSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setImporting(true);
-    setError(null);
-    try {
-      let textToImport = csvText;
-      if (importMode === 'upload' && csvFile) {
-        textToImport = await csvFile.text();
-      }
-      const res = await ApiClient.post<any>('/customers/import-csv/', { csv_text: textToImport });
-      setShowImportModal(false);
-      setToastMessage(`✓ Successfully imported ${res.created_count} accounts and updated ${res.updated_count} existing.`);
-      setTimeout(() => setToastMessage(null), 5000);
-      loadData();
-    } catch (err: any) {
-      setError(err?.response?.data?.error || err?.message || 'CSV Import failed. Please check column format.');
-    } finally {
-      setImporting(false);
-    }
-  };
 
   const handleDropOnColumn = async (e: React.DragEvent, targetCol: string, targetColLabel: string) => {
     e.preventDefault();
@@ -177,12 +144,12 @@ export function PipelinePage() {
           </div>
 
           <button
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-all cursor-pointer"
-            title="Bulk import enterprise accounts via CSV"
+            onClick={() => setIsBulkOpen(true)}
+            className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all cursor-pointer"
+            title="Bulk import RFQs, deals, and quotations via CSV or Excel"
           >
-            <Upload className="h-3.5 w-3.5 text-slate-500" />
-            <span>Import Accounts</span>
+            <FileSpreadsheet className="h-4 w-4 text-blue-600" />
+            <span>Bulk Import</span>
           </button>
 
           <button
@@ -571,108 +538,16 @@ export function PipelinePage() {
         </button>
       </div>
 
-      {/* Bulk Customer Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-5 animate-scale-in">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center space-x-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-primary">
-                  <FileSpreadsheet className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-outfit text-base font-bold text-slate-900">Bulk Import Accounts (CSV)</h3>
-                  <p className="text-xs text-slate-500">Seed or update enterprise customer accounts with discount tiers</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setImportMode('upload')}
-                className={cn("flex-1 py-1.5 rounded transition-all cursor-pointer", importMode === 'upload' ? 'bg-white text-primary shadow-xs' : 'text-slate-600 hover:text-slate-900')}
-              >
-                Upload CSV File
-              </button>
-              <button
-                type="button"
-                onClick={() => setImportMode('paste')}
-                className={cn("flex-1 py-1.5 rounded transition-all cursor-pointer", importMode === 'paste' ? 'bg-white text-primary shadow-xs' : 'text-slate-600 hover:text-slate-900')}
-              >
-                Paste Raw CSV
-              </button>
-            </div>
-
-            <form onSubmit={handleImportSubmit} className="space-y-4">
-              {importMode === 'upload' ? (
-                <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-primary transition-colors bg-slate-50/50">
-                  <Upload className="mx-auto h-8 w-8 text-slate-400 mb-2" />
-                  <p className="text-xs font-semibold text-slate-700">Drag & drop your CSV file here, or browse</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Columns: name, email, tier (gold/silver/bronze), phone, company</p>
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                    className="mt-3 text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-primary file:text-white hover:file:bg-primary-hover cursor-pointer"
-                  />
-                  {csvFile && (
-                    <div className="mt-3 flex items-center justify-center space-x-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 py-1.5 px-3 rounded-lg border border-emerald-200">
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Ready to import: {csvFile.name} ({(csvFile.size / 1024).toFixed(1)} KB)</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 block">CSV Text (Comma Separated)</label>
-                  <textarea
-                    rows={5}
-                    value={csvText}
-                    onChange={(e) => setCsvText(e.target.value)}
-                    className="w-full font-mono text-xs p-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none"
-                    placeholder="name,email,tier,phone,company&#10;Acme Corp,sales@acme.example,gold,+91 98765 43210,Acme Industries"
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={downloadSampleCsv}
-                  className="flex items-center space-x-1 text-xs font-bold text-primary hover:underline cursor-pointer"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>Download CSV Template</span>
-                </button>
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowImportModal(false)}
-                    className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={importing || (importMode === 'upload' && !csvFile) || (importMode === 'paste' && !csvText.trim())}
-                    className="flex items-center space-x-1.5 rounded-lg bg-primary hover:bg-primary-hover px-4 py-2 text-xs font-bold text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <span>{importing ? 'Importing…' : 'Execute Import'}</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Smart Bulk Import Engine Modal */}
+      <BulkImportModal
+        isOpen={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        onSuccess={() => {
+          loadData();
+          setToastMessage('✓ Bulk import completed successfully. Pipeline deals updated.');
+          setTimeout(() => setToastMessage(null), 5000);
+        }}
+      />
     </div>
   );
 }

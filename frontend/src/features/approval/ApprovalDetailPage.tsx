@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchQuotation, fetchRiskScore,
   approveQuotation, rejectQuotation, returnQuotation,
+  downloadQuotationPdf,
 } from '../../api/quotations';
 import {
   formatCurrency, formatPercent, formatDateTime,
@@ -24,7 +25,7 @@ import {
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, CheckCircle2,
   XCircle, RotateCcw, FileText, User, Clock,
-  TrendingUp, Shield, MessageSquare, RefreshCw
+  TrendingUp, Shield, MessageSquare, RefreshCw, Download,
 } from 'lucide-react';
 
 export function ApprovalDetailPage() {
@@ -107,9 +108,29 @@ export function ApprovalDetailPage() {
           </p>
         </div>
 
-        <div className="text-left sm:text-right rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Total Contract Value</div>
-          <div className="font-outfit text-2xl font-extrabold text-slate-900">{formatCurrency(quotation.total)}</div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => downloadQuotationPdf(quotation.id, quotation.quote_number)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export PDF</span>
+            </button>
+            <Link
+              to={`/verify/${quotation.quote_number}`}
+              target="_blank"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-semibold shadow-sm transition"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Verify QR Proof</span>
+            </Link>
+          </div>
+
+          <div className="text-left sm:text-right rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-w-[150px]">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Total Contract Value</div>
+            <div className="font-outfit text-2xl font-extrabold text-slate-900">{formatCurrency(quotation.total)}</div>
+          </div>
         </div>
       </div>
 

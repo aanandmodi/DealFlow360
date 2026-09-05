@@ -15,6 +15,7 @@ import { FulfillmentPage } from './features/fulfillment/FulfillmentPage';
 import { BillingPage } from './features/billing/BillingPage';
 import { ReportsPage } from './features/reports/ReportsPage';
 import { CatalogRulesPage } from './features/config/CatalogRulesPage';
+import { QuotationVerificationPage } from './features/verification/QuotationVerificationPage';
 import './index.css';
 import './features/workspace/workspace.css';
 import { InvoicesPage } from './features/workspace/InvoicesPage';
@@ -79,6 +80,10 @@ function AppRoutes() {
       <Route path="/portal/quotations/:token" element={<PortalNegotiationPage />} />
       <Route path="/portal/quotation/:token" element={<PortalNegotiationPage />} />
       <Route path="/portal" element={<PortalNegotiationPage />} />
+
+      {/* Public Cryptographic Verification Route — no auth required */}
+      <Route path="/verify/:quoteNumber" element={<QuotationVerificationPage />} />
+      <Route path="/verify" element={<QuotationVerificationPage />} />
 
       {/* Internal — protected routes with AppShell */}
       <Route path="/*" element={

@@ -197,3 +197,96 @@ export const quotationsApi = {
   },
 };
 
+export async function downloadQuotationPdf(quotationId: number, quoteNumber: string = 'Quotation', sig?: string, token?: string): Promise<void> {
+  let url = `/quotations/${quotationId}/pdf/`;
+  const params = new URLSearchParams();
+  if (sig) params.set('sig', sig);
+  if (token) params.set('token', token);
+  const qs = params.toString();
+  if (qs) url += `?${qs}`;
+
+  const blob = await ApiClient.download(url);
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = `${quoteNumber}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(blobUrl);
+}
+
+export async function fetchVerificationData(quoteNumber: string, sig?: string, token?: string) {
+  const params = new URLSearchParams();
+  if (sig) params.set('sig', sig);
+  if (token) params.set('token', token);
+  const qs = params.toString();
+  return ApiClient.get<any>(`/verify/${quoteNumber}/${qs ? `?${qs}` : ''}`);
+}
+
+export interface DispatchPreviewData {
+  quotation_id: number;
+  quote_number: string;
+  customer_name: string;
+  customer_company: string;
+  customer_phone: string;
+  customer_email: string;
+  grand_total_display: string;
+  links: {
+    verify_url: string;
+    portal_url: string;
+    pdf_url: string;
+    signature_hash: string;
+  };
+  whatsapp: {
+    phone: string;
+    text: string;
+    url: string;
+  };
+  email: {
+    to_email: string;
+    subject: string;
+    body_text: string;
+    body_html: string;
+    mailto_url: string;
+    gmail_url: string;
+  };
+}
+
+export interface DispatchExecutePayload {
+  channel: 'whatsapp' | 'email';
+  recipient?: string;
+  template_type?: 'standard' | 'fast_track' | 'urgent';
+  custom_note?: string;
+  mark_as_sent?: boolean;
+}
+
+export function fetchDispatchPreview(quotationId: number, params?: {
+  template_type?: string;
+  custom_note?: string;
+  phone?: string;
+  email?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params?.template_type) qs.set('template_type', params.template_type);
+  if (params?.custom_note) qs.set('custom_note', params.custom_note);
+  if (params?.phone) qs.set('phone', params.phone);
+  if (params?.email) qs.set('email', params.email);
+  const qStr = qs.toString();
+  return ApiClient.get<DispatchPreviewData>(`/quotations/${quotationId}/dispatch/${qStr ? `?${qStr}` : ''}`);
+}
+
+export function executeDispatchQuotation(quotationId: number, payload: DispatchExecutePayload) {
+  return ApiClient.post<{
+    success: boolean;
+    message: string;
+    quotation_status: string;
+    quotation_status_display: string;
+    channel: string;
+    recipient: string;
+    payloads: DispatchPreviewData;
+  }>(`/quotations/${quotationId}/dispatch/`, payload);
+}
+
+
+

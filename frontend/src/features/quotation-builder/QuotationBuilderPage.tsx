@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchQuotation, createQuotation, updateQuotation,
@@ -22,7 +22,8 @@ import {
 } from '../../lib/utils';
 import {
   Plus, Trash2, Save, Send, Eye, ShieldCheck, AlertTriangle,
-  Package, ArrowLeft, CheckCircle2, MinusCircle, RefreshCw, PlusCircle
+  Package, ArrowLeft, CheckCircle2, MinusCircle, RefreshCw, PlusCircle,
+  Download, ExternalLink, Share2,
 } from 'lucide-react';
 import type { QuotationLine } from '../../types';
 import { ApiClient } from '../../api/client';
@@ -30,6 +31,9 @@ import { Notice,downloadFile } from '../workspace/shared';
 import { DealConversation } from '../workspace/DealConversation';
 import { DealIntelligence } from '../workspace/DealIntelligence';
 import { UpsellPanel } from '../upsell-panel/UpsellPanel';
+import { BulkImportModal } from '../pipeline/BulkImportModal';
+import { QuotationDispatchModal } from '../pipeline/QuotationDispatchModal';
+import { FileSpreadsheet } from 'lucide-react';
 
 export function QuotationBuilderPage() {
   const { id } = useParams();
@@ -46,6 +50,9 @@ export function QuotationBuilderPage() {
   const [paymentTerms, setPaymentTerms] = useState('Net 30 Days');
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [isDispatchOpen, setIsDispatchOpen] = useState(false);
+
 
   // === Queries ===
   const { data: quotation, isLoading: loadingQuotation, error: quotationError } = useQuery({
@@ -179,8 +186,27 @@ export function QuotationBuilderPage() {
         </div>
 
         <div className="flex items-center space-x-2">
+          {isNew && (
+            <button
+              type="button"
+              onClick={() => setIsBulkOpen(true)}
+              className="flex items-center space-x-2 rounded-lg border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-700 px-4 py-2 text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-blue-600" />
+              <span>Bulk Import from CSV / Excel</span>
+            </button>
+          )}
           {canEdit && !isNew && (
             <>
+              <button
+                type="button"
+                onClick={() => setIsBulkOpen(true)}
+                className="flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-all cursor-pointer"
+                title="Bulk import line items into this quotation via CSV"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 text-blue-600" />
+                <span>Import Items (CSV)</span>
+              </button>
               <button
                 onClick={() => saveMutation.mutate()}
                 className="flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
@@ -198,7 +224,35 @@ export function QuotationBuilderPage() {
               </button>
             </>
           )}
-          {quotation&&<button className="btn btn-secondary" disabled={pdf.isPending} onClick={()=>pdf.mutate()}>Download PDF</button>}
+          {quotation && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDispatchOpen(true)}
+                className="inline-flex items-center space-x-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                style={{ backgroundColor: '#16a34a', color: '#ffffff' }}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                <span>Dispatch / Share</span>
+              </button>
+              <button
+                className="inline-flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
+                disabled={pdf.isPending}
+                onClick={() => pdf.mutate()}
+              >
+                <Download className="h-3.5 w-3.5 text-blue-600" />
+                <span>{pdf.isPending ? 'Generating...' : 'Download PDF'}</span>
+              </button>
+              <Link
+                to={`/verify/${quotation.quote_number}`}
+                target="_blank"
+                className="inline-flex items-center space-x-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 text-xs font-semibold shadow-sm transition-all"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>Verify QR</span>
+              </Link>
+            </div>
+          )}
           {quotation&&['approved','sent'].includes(quotation.status)&&<button className="btn btn-secondary" disabled={share.isPending} onClick={()=>share.mutate()}>Create customer link</button>}
           {portalLink&&<a className="btn btn-primary" href={portalLink} target="_blank" rel="noreferrer">Open customer view</a>}
 
@@ -206,7 +260,38 @@ export function QuotationBuilderPage() {
       </div>
 
       <Notice error={quotationError||createMutation.error||addLineMutation.error||updateLineMutation.error||deleteLineMutation.error||saveMutation.error||submitMutation.error||share.error||pdf.error||discountAll.error}/>
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        targetQuotationId={quotation?.id}
+        targetQuotationNumber={quotation?.quote_number}
+        onSuccess={() => {
+          if (quotation) {
+            queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+          } else {
+            navigate('/quotations');
+          }
+        }}
+      />
+      {/* Quotation Dispatch Modal */}
+      {quotation && (
+        <QuotationDispatchModal
+          isOpen={isDispatchOpen}
+          onClose={() => setIsDispatchOpen(false)}
+          quotationId={quotation.id}
+          quoteNumber={quotation.quote_number || `Q-${quotation.id}`}
+          customerName={quotation.customer_name}
+          customerPhone={(quotation as any).customer_phone}
+          customerEmail={(quotation as any).customer_email}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+            queryClient.invalidateQueries({ queryKey: ['quotations'] });
+          }}
+        />
+      )}
       {portalLink&&<div className="notice"><span>Private customer link created. It expires after the configured access period.</span><button className="btn btn-secondary btn-sm" onClick={()=>navigator.clipboard.writeText(portalLink)}>Copy link</button></div>}
+
       {/* Submit Result Alert Banner */}
       {submitMutation.isSuccess && (
         <div className={`p-4 rounded-xl border flex items-start gap-3 shadow-sm ${
@@ -323,13 +408,23 @@ export function QuotationBuilderPage() {
                   <p className="text-xs text-slate-500">{lines.length} items • Realtime line pricing & margin floor</p>
                 </div>
                 {canEdit && (
-                  <button
-                    onClick={() => setShowProductPicker(!showProductPicker)}
-                    className="flex items-center space-x-1.5 rounded-lg bg-primary hover:bg-primary-hover px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Add Product</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsBulkOpen(true)}
+                      className="flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition-all cursor-pointer"
+                      title="Bulk import multiple lines from CSV"
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5 text-blue-600" />
+                      <span>Bulk Add Items</span>
+                    </button>
+                    <button
+                      onClick={() => setShowProductPicker(!showProductPicker)}
+                      className="flex items-center space-x-1.5 rounded-lg bg-primary hover:bg-primary-hover px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add Product</span>
+                    </button>
+                  </div>
                 )}
               </div>
 

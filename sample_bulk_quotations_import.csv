@@ -1,0 +1,11 @@
+customer_name,customer_email,sku,product_name,quantity,unit_price,discount_pct,payment_terms,notes
+Aravali Healthcare,orders@aravalihealthcare.com,IN-LAP14,BusinessBook Pro 14,4,84900,8,Net 30 Days,Hospital clinic workstations
+Aravali Healthcare,orders@aravalihealthcare.com,IN-MON27,StudioView 27 Monitor,4,24500,5,Net 30 Days,Radiology dual monitor setup
+Malabar Logistics,billing@malabarlogistics.com,IN-NET48,Enterprise Network Switch,2,62500,10,Net 60 Days,Hub datacenter networking
+Malabar Logistics,billing@malabarlogistics.com,IN-DEPLOY,On-site Deployment,2,12500,0,Net 60 Days,On-site logistics engineer setup
+Narmada Technologies,procurement@narmada.com,IN-LAP14,BusinessBook Pro 14,8,84900,12,Due on Receipt,Software development laptops
+Sahyadri Manufacturing,purchase@sahyadrimfg.com,IN-NET48,Enterprise Network Switch,3,62500,15,Net 30 Days,Factory IoT switch setup
+Kaveri Digital Labs,admin@kaveridigital.in,IN-CLOUD,CloudSuite Business / seat,15,1800,6,Net 30 Days,Cloud suite seat expansion
+Konkan Retail Systems,supply@konkanretail.com,IN-MON27,StudioView 27 Monitor,6,24500,8,Net 30 Days,Retail POS back-office monitors
+Vindhya Analytics,ops@vindhyaanalytics.com,IN-DEPLOY,On-site Deployment,1,12500,5,Net 60 Days,Data engineering setup
+Deccan Learning Co.,admin@deccanlearning.org,IN-SECURE,SecureDesk Endpoint / seat,20,650,0,Due on Receipt,Student lab security endpoints
