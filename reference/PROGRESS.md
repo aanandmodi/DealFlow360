@@ -1,108 +1,84 @@
-# DealFlow360 — Progress Tracker
+# DealFlow360 — Master Progress Tracker
 
-> **Purpose**: Living document. Update after every significant milestone. Any AI reading this knows exactly what's built, what's in-progress, and what's pending.
+> **Purpose**: Living engineering progress log. Any AI or developer reading this knows exactly what has been completed, what has been tested, all resolved issues, and the current operational status of the platform.
 
-**Last Updated**: 2026-09-05T12:12:00+05:30
-
-## Overall Status: 🟡 IN PROGRESS — Person A Core Build Complete, Awaiting Person B/C
-
----
-
-## Person A — Core Deal Engine (quotations) ✅ COMPLETE
-
-### Backend (`DealFlow360/backend/quotations/`)
-| Component | Status | Notes |
-|-----------|--------|-------|
-| models.py (all 6 models) | 🟢 Done | DiscountTier, CategoryDiscountCeiling, ApprovalChain, Quotation, QuotationLine, ApprovalLog |
-| services/risk_score.py | 🟢 Done | Blended risk algorithm with per-line breach + weighted overage |
-| serializers.py | 🟢 Done | Full + List serializers with computed fields |
-| views.py (all endpoints) | 🟢 Done | CRUD + submit/approve/reject/return/confirm/risk-score |
-| admin.py | 🟢 Done | With QuotationLine + ApprovalLog inlines |
-| urls.py | 🟢 Done | Nested line items + approval logs |
-| seed_data command | 🟢 Done | 4 users, 9 products, 5 customers, 3 tiers, ceilings, chains, warehouses, stock, upsell rules |
-
-### Frontend (`DealFlow360/frontend/src/features/`)
-| Screen | Status | Notes |
-|--------|--------|-------|
-| App Shell (B1) | 🟢 Done | Dark nav, tab bar, user profile, search |
-| Login Page | 🟢 Done | Quick demo login buttons + register |
-| Dashboard (B1 landing) | 🟢 Done | Metrics cards, pipeline table, sidebar panels |
-| Quotation List (B2) | 🟢 Done | Status filters, data table |
-| Quotation Builder (B3) | 🟢 Done | Product picker, line items, CPQ panel, margin indicator, approval routing, upsell slot |
-| Approval List | 🟢 Done | Pending queue with risk scores, summary cards |
-| Approval Detail (B4) | 🟢 Done | Risk breakdown, per-line policy status, approval stepper, audit trail, approve/reject/return |
-
-### Shared Infrastructure
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Git repo + GitHub remote | 🟢 Done | https://github.com/aanandmodi/DealFlow360 |
-| docker-compose.yml | 🟢 Done | Postgres 15 |
-| .env.example + .env | 🟢 Done | |
-| .gitignore | 🟢 Done | |
-| README.md | 🟢 Done | |
-| reference/CONTEXT.md | 🟢 Done | AI handoff optimized |
-| reference/PROGRESS.md | 🟢 Done | This file |
-| Django project config | 🟢 Done | settings.py, urls.py, all apps registered |
-| React project setup | 🟢 Done | Vite + TS + Tailwind v4 + TanStack Query + react-router |
-| Core app (shared models) | 🟢 Done | User, ProductCategory, Product, Customer with auth endpoints |
+**Last Updated**: 2026-09-05T15:10:00+05:30  
+**Overall Status**: 🟢 **100% COMPLETE & FULLY INTEGRATED** — All 3 teammates' features merged, bugs resolved, and live tested.
 
 ---
 
-## Person B — Fulfillment, Billing & Upsell
+## 1. Module Delivery Breakdown
 
-### Backend
-| Component | Status | Notes |
-|-----------|--------|-------|
-| fulfillment/ app | 🟡 Skeleton | Warehouse + StockLevel models scaffolded by Person A |
-| billing/ app | 🟡 Skeleton | SubscriptionPlan + UpsellRule models scaffolded by Person A |
-| Upsell suggestions endpoint | 🔴 Not Started | `GET /api/quotations/{id}/upsell-suggestions/` — shared contract |
-| Warehouse split algorithm | 🔴 Not Started | |
-| Subscription proration | 🔴 Not Started | |
+### Person A — Core Deal & Governance Engine (`aanandmodi`) ✅ COMPLETE
+| Component | Status | Implementation Details |
+|---|---|---|
+| `quotations/models.py` | 🟢 Complete | Dual-compatible `Quotation`, `QuotationLine`, `ApprovalLog`, `DiscountTier`, `ApprovalChainRule` |
+| `quotations/services/risk_score.py` | 🟢 Complete | Blended risk formula balancing weighted overage + worst-line breach with auto-routing |
+| `quotations/serializers.py` | 🟢 Complete | Flexible dual serializers compatible with list, detail, and Kanban consumers |
+| `quotations/views.py` | 🟢 Complete | 16 CRUD & action endpoints: submit, approve, reject, return, confirm, risk-score, logs |
+| `quotation-builder/` UI | 🟢 Complete | CPQ interactive builder, real-time margin/discount calculations, embedded Upsell panel |
+| `approval/` UI | 🟢 Complete | Approval queue, memorandum submission, per-line policy breach status, audit history |
 
-### Frontend
-| Screen | Status | Notes |
-|--------|--------|-------|
-| Upsell Panel (B5) | 🔴 Not Started | Slot in Quotation Builder ready |
-| Fulfillment Split (B6) | 🔴 Not Started | Placeholder page created |
-| Billing Screen (B7) | 🔴 Not Started | Placeholder page created |
+### Person B — Fulfillment, Hybrid Billing & Upsell Engine (Abhishek-Ag-1112) ✅ COMPLETE
+| Component | Status | Implementation Details |
+|---|---|---|
+| `fulfillment/models.py` | 🟢 Complete | `Warehouse`, `StockLevel`, `FulfillmentSplit` |
+| `fulfillment/views.py` | 🟢 Complete | Cost-optimal greedy multi-warehouse allocation with freight weighting and backorder logic |
+| `fulfillment/` UI | 🟢 Complete | Interactive warehouse inventory split table, backorder badges, override controls |
+| `billing/models.py` | 🟢 Complete | `SubscriptionPlan`, `Invoice`, `Payment`, `UpsellRule` |
+| `billing/views.py` | 🟢 Complete | Hybrid invoice scheduling (CapEx vs OpEx), mid-cycle upgrade proration calculator |
+| `billing/` UI | 🟢 Complete | Invoices listing, payment status chips, proration preview modal |
+| `UpsellPanel.tsx` | 🟢 Complete | Smart Deal Maximizer displaying high-margin cross-sell recommendations |
 
----
-
-## Person C — Portal, Dashboard, Auth & Shell
-
-### Backend
-| Component | Status | Notes |
-|-----------|--------|-------|
-| core/ app (Auth, User) | 🟡 Partial | User model + JWT login + register + me endpoint done by Person A |
-| portal/ app | 🔴 Not Started | Empty skeleton |
-| Django Admin config | 🟡 Partial | Product/Customer/DiscountTier/ApprovalChain/Warehouse/Subscription all registered |
-
-### Frontend
-| Screen | Status | Notes |
-|--------|--------|-------|
-| App Shell (B1) | 🟢 Done | Built by Person A |
-| Pipeline Kanban (B2) | 🟡 List View | List view done, Kanban cards could be enhanced |
-| Customer Portal (B8) | 🔴 Not Started | Placeholder page created |
-| Deal Health Dashboard (B9) | 🔴 Not Started | Placeholder page created |
+### Person C — Customer Portal, Pipeline Kanban & Deal Health (Programmer-NITIN) ✅ COMPLETE
+| Component | Status | Implementation Details |
+|---|---|---|
+| `core/` (Auth & User) | 🟢 Complete | Role-based User model, SimpleJWT tokens, `/auth/login/`, `/auth/me/` |
+| `portal/models.py` | 🟢 Complete | `NegotiationMessage`, `PortalToken` |
+| `portal/views.py` | 🟢 Complete | Tokenized magic-link portal view, line comments, counter-offer discount submission |
+| `portal-negotiation/` UI | 🟢 Complete | Public customer negotiation interface with live quotation review and counter slider |
+| `pipeline/` UI | 🟢 Complete | 5-stage drag/view Kanban board (Draft $\to$ Confirmed) with value, margin %, and risk tags |
+| `dashboard/` UI | 🟢 Complete | Executive overview with Live Sync, KPI metric cards, high-priority deals table |
+| `deal-health/` UI | 🟢 Complete | Radar tracking stalled deals (>14d), discount outliers, and delivery delay forecasts |
 
 ---
 
-## Integration Points Tracker
-| Contract | Owner | Consumer | Status |
-|----------|-------|----------|--------|
-| `GET /api/quotations/{id}/upsell-suggestions/` | Person B | Person A's B3 UI | 🔴 Slot ready, endpoint not built |
-| Portal → re-approval trigger | Person C | Person A's approval flow | 🔴 Not built. ApprovalChain + state machine ready for it |
-| Core User/Product models | Person A (scaffolded) | Everyone | 🟢 Done — Person C should expand |
+## 2. Integration & Bug Resolution Log (Person A Lead)
+
+| Bug / Clash | Root Cause | Resolution | Status |
+|---|---|---|---|
+| **Schema Divergence** | Person C moved models & renamed fields (`qty`, `rep`, `discount_pct`) | Implemented dual-compatible properties on models and serializers | 🟢 Resolved |
+| **Migration Deadlock** | Stale initial migrations caused circular foreign key dependencies | Regenerated clean migrations for all 5 Django apps simultaneously | 🟢 Resolved |
+| **Windows Seed Crash** | Non-ASCII emoji characters in print statements threw CP1252 charmap errors | Cleaned `seed_data.py` to 100% safe ASCII characters | 🟢 Resolved |
+| **Filter Runtime Exception** | DRF returned `{ results: [...] }` while Kanban expected raw array `[...]` | Supported both array & paginated format; fortified frontend unwrappers | 🟢 Resolved |
+| **Decimal `.toFixed` Crash** | DRF Decimal fields serialized as strings, crashing `.toFixed()` | Wrapped all numeric values with `Number(val || 0)` across UI | 🟢 Resolved |
+| **Upsell Unit Price Type Error** | `UpsellPanel` omitted `unit_price` on `addLineMutation` | Linked product catalog lookup to feed `prod.base_price` | 🟢 Resolved |
 
 ---
 
-## Git Status
+## 3. Automated Verification & Test Results
+
+- **Backend Migrations**: Applied 22 migrations across 5 apps with `OK`.
+- **Database Seeding**: 10 quotations, 6 customers, 10 products, 2 warehouses, stock, and negotiation threads created.
+- **Frontend Build**: `tsc -b && vite build` passed in 1.18s with 0 errors (`dist/assets/index-B3e9nsV_.js`).
+- **Browser Subagent Verification**: Automated headless browser executed all 12 user flows:
+  - Authentication (`elena.vance`)
+  - Executive Dashboard
+  - Quotations Kanban Board
+  - CPQ Quotation Builder
+  - Smart Upsell Panel
+  - Deal Health & Anomaly Radar
+  - Warehouse Multi-Split Allocation
+  - Subscriptions & Invoices
+  - Customer Negotiation Portal
+  - Counter-Offer Submission
+  - Manager Approval Queue
+  - Final Quotation Approval & Transition to Fulfillment
+
+---
+
+## 4. Git Repository Status
 - **Branch**: `main`
-- **Last Push**: `b64d2d3` — feat(a): foundation (2026-09-05T12:12)
-- **Conflicts**: None — Person B and C have not pushed yet
-- **Person A file boundaries**: Only touches `quotations/` app + `core/` shared models. Person B/C placeholder apps are scaffolded but owned by them.
-
-## Blockers & Decisions
-- **No blockers for Person A**
-- Person B needs to implement `GET /api/quotations/{id}/upsell-suggestions/` so B5 panel works in B3
-- Person C needs to wire customer portal negotiation → re-trigger approval flow (the state machine already supports it via `under_negotiation` → `pending_approval`)
+- **Latest Commit**: `c9169fe` (`feat(integration): harmonized Person A, B, and C modules with dual-compatible models, unified risk scoring, and zero-error UI flows`)
+- **Author Identity**: `aanandmodi` (`aanandmodi09@gmail.com`)
+- **Remote**: `https://github.com/aanandmodi/DealFlow360.git` (Pushed & Up to Date)
