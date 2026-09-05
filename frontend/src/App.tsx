@@ -16,6 +16,7 @@ import { BillingPage } from './features/billing/BillingPage';
 import { ReportsPage } from './features/reports/ReportsPage';
 import { CatalogRulesPage } from './features/config/CatalogRulesPage';
 import { QuotationVerificationPage } from './features/verification/QuotationVerificationPage';
+import { LandingPage } from './features/landing/LandingPage';
 import './index.css';
 import './features/workspace/workspace.css';
 import { InvoicesPage } from './features/workspace/InvoicesPage';
@@ -73,6 +74,10 @@ function RoleRoute({ allowedRoles, children }: { allowedRoles: string[]; childre
 function AppRoutes() {
   return (
     <Routes>
+      {/* Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/landing" element={<LandingPage />} />
+
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
 
