@@ -19,8 +19,8 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if not settings.DEBUG:
-            raise CommandError('Demonstration seeding is disabled in production.')
+        if not settings.DEBUG and os.getenv('ALLOW_DEMO_SEED', '0') != '1':
+            raise CommandError('Demonstration seeding is disabled in production. Set ALLOW_DEMO_SEED=1 to permit.')
         password = os.getenv('DEMO_PASSWORD')
         if not password or len(password) < 12:
             raise CommandError('Set DEMO_PASSWORD to a local password of at least 12 characters.')
