@@ -44,7 +44,8 @@ export function SalesDashboard() {
     }
   };
 
-  const highPriorityQuotes = quotations
+  const quotesList = Array.isArray(quotations) ? quotations : [];
+  const highPriorityQuotes = quotesList
     .filter(q => ['pending_approval', 'under_negotiation', 'approved', 'confirmed'].includes(q.status))
     .slice(0, 5);
 

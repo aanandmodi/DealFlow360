@@ -526,6 +526,21 @@ export function QuotationBuilderPage() {
                 </div>
               </div>
             </div>
+
+            {/* Upsell & Cross-Sell Recommendations (Person B) */}
+            <UpsellPanel
+              quotationId={quotation.id}
+              onAddProduct={(productId) => {
+                const prod = products.find((p) => p.id === productId);
+                const price = prod ? Number(prod.base_price) : 0;
+                addLineMutation.mutate({
+                  product: productId,
+                  quantity: 1,
+                  unit_price: price,
+                  discount_percent: 0,
+                });
+              }}
+            />
           </div>
         )}
       </div>

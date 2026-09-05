@@ -18,8 +18,12 @@ export type {
 
 // === Quotation CRUD (Person A) ===
 
-export function fetchQuotations(params?: Record<string, string>) {
-  return apiClient<{ results: Quotation[]; count: number }>('/quotations/', { params });
+export async function fetchQuotations(params?: Record<string, string>): Promise<{ results: Quotation[]; count: number }> {
+  const res = await apiClient<any>('/quotations/', { params });
+  if (Array.isArray(res)) {
+    return { results: res, count: res.length };
+  }
+  return { results: res?.results || [], count: res?.count ?? (res?.results?.length || 0) };
 }
 
 export function fetchQuotation(id: number) {
@@ -109,33 +113,36 @@ export function fetchApprovalLogs(quotationId: number) {
 
 // === Config & Catalogs ===
 
-export function fetchDiscountTiers() {
-  return apiClient<{ results: { id: number; tier_key: string; name: string; max_discount_percent: string }[] }>(
-    '/quotations/discount-tiers/'
-  );
+export async function fetchDiscountTiers(): Promise<{ results: { id: number; tier_key: string; name: string; max_discount_percent: string }[] }> {
+  const res = await apiClient<any>('/quotations/discount-tiers/');
+  const list = Array.isArray(res) ? res : (res?.results || []);
+  return { results: list };
 }
 
-export function fetchProducts(params?: Record<string, string>) {
-  return apiClient<{ results: Product[] }>(
-    '/products/', { params }
-  );
+export async function fetchProducts(params?: Record<string, string>): Promise<{ results: Product[] }> {
+  const res = await apiClient<any>('/products/', { params });
+  const list = Array.isArray(res) ? res : (res?.results || []);
+  return { results: list };
 }
 
-export function fetchCustomers(params?: Record<string, string>) {
-  return apiClient<{ results: Customer[] }>(
-    '/customers/', { params }
-  );
+export async function fetchCustomers(params?: Record<string, string>): Promise<{ results: Customer[] }> {
+  const res = await apiClient<any>('/customers/', { params });
+  const list = Array.isArray(res) ? res : (res?.results || []);
+  return { results: list };
 }
 
 // === Person C Object-style API ===
 
 export const quotationsApi = {
-  list: (params?: { status?: string; rep?: string }) => {
+  list: async (params?: { status?: string; rep?: string }): Promise<QuotationListItem[]> => {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);
     if (params?.rep) query.set('rep', params.rep);
     const qs = query.toString();
-    return ApiClient.get<QuotationListItem[]>(`/quotations/${qs ? `?${qs}` : ''}`);
+    const res = await ApiClient.get<any>(`/quotations/${qs ? `?${qs}` : ''}`);
+    if (Array.isArray(res)) return res;
+    if (res && Array.isArray(res.results)) return res.results;
+    return [];
   },
 
   detail: (id: number) => ApiClient.get<Quotation>(`/quotations/${id}/`),

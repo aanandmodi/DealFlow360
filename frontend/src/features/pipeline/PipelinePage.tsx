@@ -48,10 +48,11 @@ export function PipelinePage() {
     }
   };
 
-  const filteredQuotations = quotations.filter(q =>
+  const quotesList = Array.isArray(quotations) ? quotations : [];
+  const filteredQuotations = quotesList.filter(q =>
     !searchQuery ||
-    q.quote_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    q.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
+    (q.quote_number && q.quote_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (q.customer_name && q.customer_name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const getColumnQuotations = (statusKey: string) =>
@@ -243,12 +244,12 @@ export function PipelinePage() {
                     <span className={`badge ${getStatusBadgeClass(q.status)}`}>{getStatusLabel(q.status)}</span>
                   </td>
                   <td className="px-4 py-2 text-xs">{q.rep_name}</td>
-                  <td className="px-4 py-2 text-right font-mono text-sm font-medium">{formatCurrency(q.total_amount)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-sm font-medium">{formatCurrency(Number(q.total_amount || 0))}</td>
                   <td className="px-4 py-2 text-right font-mono text-sm"
-                      style={{ color: q.margin_pct > 25 ? 'var(--color-success-text)' : 'var(--color-danger-text)' }}>
-                    {q.margin_pct.toFixed(1)}%
+                      style={{ color: Number(q.margin_pct || 0) > 25 ? 'var(--color-success-text)' : 'var(--color-danger-text)' }}>
+                    {Number(q.margin_pct || 0).toFixed(1)}%
                   </td>
-                  <td className="px-4 py-2 text-right font-mono text-sm">{q.blended_risk_score.toFixed(1)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-sm">{Number(q.blended_risk_score || 0).toFixed(1)}</td>
                   <td className="px-4 py-2 text-xs" style={{ color: 'var(--color-text-caption)' }}>
                     {timeAgo(q.created_at)}
                   </td>
@@ -320,9 +321,9 @@ function QuotationCard({ quotation: q, onClick }: { quotation: QuotationListItem
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold" style={{ color: '#2563EB' }}>{q.quote_number}</span>
         <div className="flex items-center gap-1.5">
-          {q.blended_risk_score > 5 && (
+          {Number(q.blended_risk_score || 0) > 5 && (
             <span className="badge badge-danger" style={{ fontSize: 10, height: 18, padding: '0 6px' }}>
-              <AlertTriangle className="w-2.5 h-2.5" /> Over {q.blended_risk_score.toFixed(0)}% Policy
+              <AlertTriangle className="w-2.5 h-2.5" /> Over {Number(q.blended_risk_score || 0).toFixed(0)}% Policy
             </span>
           )}
           <span className={`badge ${getStatusBadgeClass(q.status)}`} style={{ fontSize: 10, height: 18, padding: '0 6px' }}>

@@ -20,9 +20,9 @@ class Command(BaseCommand):
     help = 'Seed the database with realistic demo data for DealFlow360'
 
     def handle(self, *args, **options):
-        self.stdout.write('🌱 Seeding DealFlow360 database...\n')
+        self.stdout.write('* Seeding DealFlow360 database...\n')
 
-        # ── Users ──
+        # -- Users --
         admin = User.objects.create_superuser(
             username='admin', email='admin@dealflow360.com', password='admin123',
             first_name='System', last_name='Admin', role='admin'
@@ -55,7 +55,7 @@ class Command(BaseCommand):
             username='lisa.chen', email='lisa@apexglobal.com', password='pass123',
             first_name='Lisa', last_name='Chen', role='customer'
         )
-        self.stdout.write(self.style.SUCCESS('  ✓ Users created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Users created'))
 
         # ── Customers ──
         c_acme = Customer.objects.create(
@@ -88,13 +88,13 @@ class Command(BaseCommand):
             address='900 Financial District\nNew York, NY 10004',
             tier='gold', phone='(212) 555-0256'
         )
-        self.stdout.write(self.style.SUCCESS('  ✓ Customers created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Customers created'))
 
-        # ── Products ──
+        # -- Products --
         p_laptop = Product.objects.create(
             name='Laptop Pro 14', sku='HW-LP14', category='hardware',
             base_price=1200, unit='unit', tax_pct=8,
-            description='Core i7, 32GB RAM, 1TB SSD — Enterprise Fleet Deployment'
+            description='Core i7, 32GB RAM, 1TB SSD - Enterprise Fleet Deployment'
         )
         p_server = Product.objects.create(
             name='Enterprise Server Unit SK-8832', sku='HW-SK8832', category='hardware',
@@ -147,9 +147,9 @@ class Command(BaseCommand):
         ProductVariant.objects.create(product=p_laptop, attribute='RAM', value='64GB', extra_price=300)
         ProductVariant.objects.create(product=p_laptop, attribute='Storage', value='512GB SSD', extra_price=-50)
         ProductVariant.objects.create(product=p_laptop, attribute='Storage', value='2TB SSD', extra_price=200)
-        self.stdout.write(self.style.SUCCESS('  ✓ Products created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Products created'))
 
-        # ── Price Lists ──
+        # -- Price Lists --
         pl_bronze = PriceList.objects.create(name='Bronze Standard', tier='bronze', currency='USD')
         pl_silver = PriceList.objects.create(name='Silver Preferred', tier='silver', currency='USD')
         pl_gold = PriceList.objects.create(name='Gold Enterprise', tier='gold', currency='USD')
@@ -158,9 +158,9 @@ class Command(BaseCommand):
         for product in Product.objects.all():
             PriceListItem.objects.create(price_list=pl_gold, product=product, price=product.base_price * Decimal('0.95'))
             PriceListItem.objects.create(price_list=pl_silver, product=product, price=product.base_price * Decimal('0.98'))
-        self.stdout.write(self.style.SUCCESS('  ✓ Price lists created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Price lists created'))
 
-        # ── Discount Tiers ──
+        # -- Discount Tiers --
         # Different ceilings per tier AND category
         tiers_data = [
             ('bronze', 'hardware', 5), ('bronze', 'services', 3), ('bronze', 'subscriptions', 5), ('bronze', 'software', 5),
@@ -169,24 +169,24 @@ class Command(BaseCommand):
         ]
         for tier, cat, pct in tiers_data:
             DiscountTier.objects.create(tier=tier, category=cat, max_discount_pct=pct)
-        self.stdout.write(self.style.SUCCESS('  ✓ Discount tiers created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Discount tiers created'))
 
-        # ── Approval Chain Rules ──
+        # -- Approval Chain Rules --
         ApprovalChainRule.objects.create(
-            name='Low Risk — Auto Approve', min_over_pct=0, max_over_pct=0,
+            name='Low Risk - Auto Approve', min_over_pct=0, max_over_pct=0,
             requires_manager=False, requires_finance=False
         )
         ApprovalChainRule.objects.create(
-            name='Medium Risk — Manager Only', min_over_pct=Decimal('0.01'), max_over_pct=10,
+            name='Medium Risk - Manager Only', min_over_pct=Decimal('0.01'), max_over_pct=10,
             requires_manager=True, requires_finance=False
         )
         ApprovalChainRule.objects.create(
-            name='High Risk — Manager + Finance', min_over_pct=Decimal('10.01'), max_over_pct=100,
+            name='High Risk - Manager + Finance', min_over_pct=Decimal('10.01'), max_over_pct=100,
             requires_manager=True, requires_finance=True
         )
-        self.stdout.write(self.style.SUCCESS('  ✓ Approval chain rules created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Approval chain rules created'))
 
-        # ── Warehouses ──
+        # -- Warehouses --
         wh_austin = Warehouse.objects.create(
             name='Austin Central Hub', location='Austin, TX', shipping_cost_weight=1.0
         )
@@ -198,9 +198,9 @@ class Command(BaseCommand):
         for product in Product.objects.filter(category='hardware'):
             StockLevel.objects.create(warehouse=wh_austin, product=product, in_stock=200, reserved=30)
             StockLevel.objects.create(warehouse=wh_newark, product=product, in_stock=150, reserved=20)
-        self.stdout.write(self.style.SUCCESS('  ✓ Warehouses & stock created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Warehouses & stock created'))
 
-        # ── Subscription Plans ──
+        # -- Subscription Plans --
         SubscriptionPlan.objects.create(
             name='Cloud Platform Monthly', product=p_cloud, cycle='monthly', price=299
         )
@@ -216,17 +216,17 @@ class Command(BaseCommand):
         SubscriptionPlan.objects.create(
             name='Security Bot Monthly', product=p_security, cycle='monthly', price=199
         )
-        self.stdout.write(self.style.SUCCESS('  ✓ Subscription plans created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Subscription plans created'))
 
-        # ── Upsell Rules ──
+        # -- Upsell Rules --
         UpsellRule.objects.create(product=p_laptop, suggested_product=p_monitor, min_margin_pct=25, is_promoted=True)
         UpsellRule.objects.create(product=p_laptop, suggested_product=p_warranty, min_margin_pct=30, is_promoted=True)
         UpsellRule.objects.create(product=p_laptop, suggested_product=p_onsite, min_margin_pct=20)
         UpsellRule.objects.create(product=p_server, suggested_product=p_cloud, min_margin_pct=25, is_promoted=True)
         UpsellRule.objects.create(product=p_server, suggested_product=p_care, min_margin_pct=30)
-        self.stdout.write(self.style.SUCCESS('  ✓ Upsell rules created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Upsell rules created'))
 
-        # ── Sample Quotations ──
+        # -- Sample Quotations --
         def make_quote(number, customer, rep, stat, lines_data, days_ago=0, risk=0):
             q = Quotation.objects.create(
                 quote_number=number,
@@ -254,7 +254,7 @@ class Command(BaseCommand):
                 )
             return q
 
-        # Q-1042: Acme Corp — Under Negotiation, high risk (the demo flow quotation)
+        # Q-1042: Acme Corp - Under Negotiation, high risk (the demo flow quotation)
         q1042 = make_quote('Q-1042', c_acme, rep1, 'under_negotiation', [
             (p_laptop, 2, 1200, 12, False),
             (p_onsite, 1, 450, 10, False),
@@ -263,14 +263,14 @@ class Command(BaseCommand):
         ApprovalLog.objects.create(quotation=q1042, action='submitted', actor=rep1, step_order=1,
                                    role_required='sales_manager', note='Blended risk score: 8.50%')
         ApprovalLog.objects.create(quotation=q1042, action='approved', actor=manager, step_order=1,
-                                   role_required='sales_manager', note='Approved — hardware discount within Gold tier limits')
+                                   role_required='sales_manager', note='Approved - hardware discount within Gold tier limits')
 
-        # Q-1031: Apex Global — Stalled (16 days idle)
+        # Q-1031: Apex Global - Stalled (16 days idle)
         q1031 = make_quote('Q-1031', c_apex, rep1, 'sent', [
             (p_server, 12, 4500, 8, False),
         ], days_ago=16, risk=2)
 
-        # Q-1039: Delta Industries — Pending Approval
+        # Q-1039: Delta Industries - Pending Approval
         q1039 = make_quote('Q-1039', c_delta, rep3, 'pending_approval', [
             (p_iot, 1, 550, 8, True),
             (p_server, 48, 4500, 5, False),
@@ -278,48 +278,48 @@ class Command(BaseCommand):
         ApprovalLog.objects.create(quotation=q1039, action='submitted', actor=rep3, step_order=1,
                                    role_required='sales_manager', note='Blended risk score: 3.20%')
 
-        # Q-1045: TechNova — Draft
+        # Q-1045: TechNova - Draft
         q1045 = make_quote('Q-1045', c_techno, manager, 'draft', [
             (p_cloud, 1, 299, 0, True),
             (p_server, 1, 4500, 0, False),
         ], risk=0)
 
-        # Q-1046: Starlight Media — Draft
+        # Q-1046: Starlight Media - Draft
         q1046 = make_quote('Q-1046', c_starlight, rep1, 'draft', [
             (p_laptop, 400, 1200, 5, False),
         ], risk=0)
 
-        # Q-1037: Apex Logistics — Approved
+        # Q-1037: Apex Logistics - Approved
         q1037 = make_quote('Q-1037', c_apex, manager, 'approved', [
             (p_server, 24, 4500, 7, False),
             (p_care, 24, 149, 5, True),
         ], risk=0)
 
-        # Q-1038: Delta — Approved
+        # Q-1038: Delta - Approved
         q1038 = make_quote('Q-1038', c_delta, rep2, 'approved', [
             (p_cloud, 10, 299, 3, True),
         ], risk=0)
 
-        # Q-1033: Vanguard FinTech — Portal Active (counter-offer)
+        # Q-1033: Vanguard FinTech - Portal Active (counter-offer)
         q1033 = make_quote('Q-1033', c_vanguard, manager, 'under_negotiation', [
             (p_laptop, 50, 1200, 8, False),
             (p_security, 50, 199, 5, True),
         ], risk=1.5)
 
-        # Q-1035: TechNova — Confirmed
+        # Q-1035: TechNova - Confirmed
         q1035 = make_quote('Q-1035', c_techno, rep3, 'confirmed', [
             (p_security, 10, 199, 3, True),
         ], risk=0)
 
-        # Q-1028: Starlight Media — Approved, low margin
+        # Q-1028: Starlight Media - Approved, low margin
         q1028 = make_quote('Q-1028', c_starlight, rep2, 'approved', [
             (p_cloud, 50, 299, 17, True),
             (p_care, 50, 149, 12, True),
         ], days_ago=5, risk=12)
 
-        self.stdout.write(self.style.SUCCESS('  ✓ Sample quotations created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Sample quotations created'))
 
-        # ── Fulfillment Splits ──
+        # -- Fulfillment Splits --
         FulfillmentSplit.objects.create(
             quotation=q1039, warehouse=wh_austin, product=p_server, qty=40,
             status='accepted', promised_ship_date=date.today() + timedelta(days=3), estimated_cost=150
@@ -328,9 +328,9 @@ class Command(BaseCommand):
             quotation=q1039, warehouse=wh_newark, product=p_server, qty=8,
             status='suggested', promised_ship_date=date.today() - timedelta(days=2), estimated_cost=220
         )
-        self.stdout.write(self.style.SUCCESS('  ✓ Fulfillment splits created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Fulfillment splits created'))
 
-        # ── Negotiation Messages ──
+        # -- Negotiation Messages --
         from portal.models import NegotiationMessage
         NegotiationMessage.objects.create(
             quotation=q1042, author_type='customer', author_name='John Reynolds',
@@ -352,9 +352,9 @@ class Command(BaseCommand):
             message='We need better pricing for this volume. Counter-proposing $112,000 total (-6.6%).',
             counter_discount_percent=12,
         )
-        self.stdout.write(self.style.SUCCESS('  ✓ Negotiation messages created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Negotiation messages created'))
 
-        # ── Invoices ──
+        # -- Invoices --
         inv1 = Invoice.objects.create(
             invoice_number='INV-1042', quotation=q1042, type='one_time',
             amount=Decimal('2679.00'), status='sent', due_date=date.today() + timedelta(days=30)
@@ -364,13 +364,13 @@ class Command(BaseCommand):
             amount=Decimal('1930.70'), status='paid', due_date=date.today() - timedelta(days=5)
         )
         Payment.objects.create(invoice=inv2, amount=Decimal('1930.70'), method='bank_transfer', reference='ACH-7392')
-        self.stdout.write(self.style.SUCCESS('  ✓ Invoices & payments created'))
+        self.stdout.write(self.style.SUCCESS('  [OK] Invoices & payments created'))
 
         self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS('✅ Seed data complete!'))
+        self.stdout.write(self.style.SUCCESS('[SUCCESS] Seed data complete!'))
         self.stdout.write('')
         self.stdout.write('  Login credentials:')
-        self.stdout.write('  ─────────────────────────────────────')
+        self.stdout.write('  -------------------------------------')
         self.stdout.write('  Admin:         admin / admin123')
         self.stdout.write('  Sales Manager: elena.vance / pass123')
         self.stdout.write('  Finance:       michael.shah / pass123')
@@ -379,4 +379,4 @@ class Command(BaseCommand):
         self.stdout.write('  Sales Rep:     david.kim / pass123')
         self.stdout.write('  Customer:      john.reynolds / pass123')
         self.stdout.write('  Customer:      lisa.chen / pass123')
-        self.stdout.write('  ─────────────────────────────────────')
+        self.stdout.write('  -------------------------------------')
