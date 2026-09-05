@@ -221,11 +221,11 @@ class Command(BaseCommand):
         ]:
             StockLevel.objects.get_or_create(
                 warehouse=main_wh, product=product,
-                defaults={'quantity': main_qty, 'reorder_point': 10},
+                defaults={'in_stock': main_qty, 'reserved': 0},
             )
             StockLevel.objects.get_or_create(
                 warehouse=east_wh, product=product,
-                defaults={'quantity': east_qty, 'reorder_point': 5},
+                defaults={'in_stock': east_qty, 'reserved': 0},
             )
 
         self.stdout.write(self.style.SUCCESS('  [OK] Stock levels created'))
@@ -233,31 +233,31 @@ class Command(BaseCommand):
         # === Subscription Plans ===
         SubscriptionPlan.objects.get_or_create(
             name='Care Plan Monthly',
-            defaults={'product': care_plan, 'interval': 'monthly', 'price': 45},
+            defaults={'product': care_plan, 'cycle': 'monthly', 'price': 45},
         )
         SubscriptionPlan.objects.get_or_create(
             name='Cloud Backup Monthly',
-            defaults={'product': cloud_backup, 'interval': 'monthly', 'price': 29.99},
+            defaults={'product': cloud_backup, 'cycle': 'monthly', 'price': 29.99},
         )
 
         self.stdout.write(self.style.SUCCESS('  [OK] Subscription plans created'))
 
         # === Upsell Rules ===
         UpsellRule.objects.get_or_create(
-            source_product=laptop, target_product=mouse,
-            defaults={'margin_threshold': 15, 'promotion_tag': 'Bundle -17%'},
+            product=laptop, suggested_product=mouse,
+            defaults={'min_margin_pct': 15, 'is_promoted': True},
         )
         UpsellRule.objects.get_or_create(
-            source_product=laptop, target_product=dock,
-            defaults={'margin_threshold': 15, 'promotion_tag': 'Promo 15% Off'},
+            product=laptop, suggested_product=dock,
+            defaults={'min_margin_pct': 15, 'is_promoted': True},
         )
         UpsellRule.objects.get_or_create(
-            source_product=laptop, target_product=care_plan,
-            defaults={'margin_threshold': 10, 'promotion_tag': 'Monthly Recurring'},
+            product=laptop, suggested_product=care_plan,
+            defaults={'min_margin_pct': 10, 'is_promoted': False},
         )
         UpsellRule.objects.get_or_create(
-            source_product=server, target_product=ext_warranty,
-            defaults={'margin_threshold': 10, 'promotion_tag': 'Recommended'},
+            product=server, suggested_product=ext_warranty,
+            defaults={'min_margin_pct': 10, 'is_promoted': True},
         )
 
         self.stdout.write(self.style.SUCCESS('  [OK] Upsell rules created'))

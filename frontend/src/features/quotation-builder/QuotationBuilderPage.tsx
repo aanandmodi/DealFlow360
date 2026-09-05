@@ -21,6 +21,7 @@ import {
   Package, ArrowLeft, CheckCircle2, MinusCircle,
 } from 'lucide-react';
 import type { Quotation, QuotationLine } from '../../types';
+import { UpsellPanel } from '../upsell-panel/UpsellPanel';
 
 export function QuotationBuilderPage() {
   const { id } = useParams();
@@ -409,15 +410,10 @@ export function QuotationBuilderPage() {
 
           {/* Upsell Panel Slot (Person B) */}
           {!isNew && lines.length > 0 && (
-            <div className="bg-[var(--color-indigo-bg)] border border-[var(--color-indigo-border)] rounded-md p-4 elevation-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold text-[var(--color-indigo-text)]">💡 Upsell / Cross-Sell Suggestions</span>
-                <span className="badge badge-active"><span className="badge-dot" /> Smart Engine</span>
-              </div>
-              <p className="text-xs text-[var(--color-indigo-text)]">
-                Person B's upsell panel will appear here with product pairing recommendations based on the current line items.
-              </p>
-            </div>
+            <UpsellPanel
+              quotationId={Number(id)}
+              onAddProduct={canEdit ? handleAddProduct : undefined}
+            />
           )}
         </div>
 

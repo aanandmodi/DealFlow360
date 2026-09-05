@@ -536,6 +536,8 @@ The frontend will be available at `http://localhost:5173/`.
 | Portal / Screen | URL | Description |
 |---|---|---|
 | **Frontend Web App** | `http://localhost:5173` | Main DealFlow360 Single-Page Application |
+| **Fulfillment & Split (B6)** | `http://localhost:5173/fulfillment` | Multi-warehouse auto-split & backorder management |
+| **Billing & Subscriptions (B7)** | `http://localhost:5173/subscriptions` | Hybrid billing schedule, mid-cycle proration & credit notes |
 | **Backend REST API** | `http://localhost:8000/api/` | DRF browsable API root |
 | **Django Admin Panel** | `http://localhost:8000/admin/` | Direct database administration |
 
@@ -594,6 +596,21 @@ The frontend will be available at `http://localhost:5173/`.
 | `GET` | `/api/dashboard/stalled-deals/` | List of inactive or aging deals exceeding SLA thresholds | Yes (JWT) |
 | `GET` | `/api/dashboard/anomalies/` | Outlier quotations with heavy discount breaches | Yes (JWT) |
 | `GET` | `/api/dashboard/slippage/` | Quotations suffering margin erosion | Yes (JWT) |
+
+### Fulfillment & Multi-Warehouse Auto-Split (`/api/fulfillment/`) — Built by Person B
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `POST` | `/api/fulfillment/{quotation_id}/suggest-split/` | Runs greedy cost-weighted multi-warehouse allocation preview | Yes (JWT) |
+| `POST` | `/api/fulfillment/{quotation_id}/accept-split/` | Commits warehouse split and reserves inventory across depots | Yes (JWT) |
+| `POST` | `/api/fulfillment/{quotation_id}/override-split/` | Manual allocation override across warehouses and backorders | Yes (JWT) |
+
+### Hybrid Billing, Subscriptions & Upsell (`/api/billing/` & `/api/quotations/`) — Built by Person B
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/billing/{quotation_id}/schedule/` | Unified billing schedule partitioning CapEx vs. OpEx | Yes (JWT) |
+| `POST` | `/api/billing/{line_id}/prorate/` | Mid-cycle quantity/plan adjustment with calendar-accurate proration | Yes (JWT) |
+| `POST` | `/api/billing/{line_id}/cancel/` | Subscription cancellation with automatic credit note computation | Yes (JWT) |
+| `GET` | `/api/quotations/{id}/upsell-suggestions/` | **Shared Contract**: Margin-accretive co-purchase recommendations | Yes (JWT) |
 
 #### Generate Customer Portal Magic Token (CLI)
 ```bash
