@@ -16,7 +16,6 @@ import {
   Settings,
   Search,
   LogOut,
-  Menu,
   X,
   RefreshCw,
   Layers,
@@ -209,13 +208,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex flex-1 min-w-0 flex-col">
         <header className="h-16 shrink-0 flex items-center gap-3 border-b border-slate-200 bg-white px-4 md:px-7">
-          <button
-            className="md:hidden icon-button"
-            aria-label="Open navigation"
-            onClick={() => setMobile(true)}
-          >
-            <Menu size={19} />
-          </button>
           <span className="text-xs text-slate-400 hidden sm:inline">Workspace</span>
           <span className="text-slate-300 hidden sm:inline">/</span>
           <span className="text-xs font-semibold text-slate-700">{title}</span>
