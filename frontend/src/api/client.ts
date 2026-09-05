@@ -1,4 +1,6 @@
-const BASE_URL = '/api';
+const RAW_BASE = (import.meta as any).env?.VITE_API_URL || '';
+const BASE_URL = RAW_BASE ? (RAW_BASE.endsWith('/api') ? RAW_BASE : `${RAW_BASE.replace(/\/$/, '')}/api`) : '/api';
+
 export class ApiClient {
   private static refreshing: Promise<string | null> | null = null;
   static setTokens(access: string, refresh: string) { sessionStorage.setItem('access_token', access); sessionStorage.setItem('refresh_token', refresh); }
@@ -7,7 +9,7 @@ export class ApiClient {
     if (!this.refreshing) this.refreshing = (async () => {
       const token = sessionStorage.getItem('refresh_token');
       if (!token) return null;
-      const response = await fetch('/api/auth/refresh/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh:token})});
+      const response = await fetch(`${BASE_URL}/auth/refresh/`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh:token})});
       if (!response.ok) return null;
       const data = await response.json(); this.setTokens(data.access,data.refresh || token);return data.access;
     })().finally(()=>{this.refreshing=null;});

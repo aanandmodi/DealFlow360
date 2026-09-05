@@ -6,12 +6,21 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
+try:
+    import dj_database_url
+except ImportError:
+    dj_database_url = None
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR.parent / '.env')
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-change-me')
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('true', '1', 'yes')
+
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()] + ['testserver']
+render_host = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+if render_host and render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_host)
 
 # Application definition
 INSTALLED_APPS = [
@@ -36,6 +45,14 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+]
+try:
+    import whitenoise  # noqa: F401
+    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+except ImportError:
+    pass
+
+MIDDLEWARE.extend([
     'core.middleware.PrivateAPIHeaders',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -44,7 +61,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
+])
 
 ROOT_URLCONF = 'dealflow360.urls'
 
@@ -67,19 +84,33 @@ TEMPLATES = [
 WSGI_APPLICATION = 'dealflow360.wsgi.application'
 
 # Explicit database selection; production never silently changes databases.
-USE_SQLITE = os.getenv('USE_SQLITE', '1' if DEBUG else '0').lower() in ('1', 'true', 'yes')
-if USE_SQLITE and not DEBUG:
-    raise RuntimeError('Production requires PostgreSQL (USE_SQLITE=0).')
-DATABASES = {'default': ({
-    'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3',
-} if USE_SQLITE else {
-    'ENGINE': 'django.db.backends.postgresql',
-    'NAME': os.getenv('POSTGRES_DB', 'dealflow360'),
-    'USER': os.getenv('POSTGRES_USER', 'dealflow360'),
-    'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
-    'HOST': os.getenv('POSTGRES_HOST', '127.0.0.1'),
-    'PORT': os.getenv('POSTGRES_PORT', '5432'),
-})}
+DATABASE_URL = os.getenv('DATABASE_URL')
+USE_SQLITE = os.getenv('USE_SQLITE', '0' if (DATABASE_URL or not DEBUG) else '1').lower() in ('1', 'true', 'yes')
+
+if DATABASE_URL and dj_database_url:
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
+    }
+elif USE_SQLITE:
+    if not DEBUG and not DATABASE_URL:
+        raise RuntimeError('Production requires PostgreSQL or DATABASE_URL (USE_SQLITE=0).')
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('POSTGRES_DB', 'dealflow360'),
+            'USER': os.getenv('POSTGRES_USER', 'dealflow360'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+            'HOST': os.getenv('POSTGRES_HOST', '127.0.0.1'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        }
+    }
 DATABASES['default']['ATOMIC_REQUESTS'] = True
 
 # Auth
@@ -101,6 +132,11 @@ USE_TZ = True
 # Static files
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+try:
+    import whitenoise  # noqa: F401
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+except ImportError:
+    pass
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -133,9 +169,14 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS
-CORS_ALLOWED_ORIGINS = [
-    os.getenv('FRONTEND_URL', 'http://localhost:5173'),
+# CORS & CSRF
+cors_origins = [h.strip() for h in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
+frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173').strip()
+if frontend_url and frontend_url not in cors_origins:
+    cors_origins.append(frontend_url)
+CORS_ALLOWED_ORIGINS = cors_origins
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -146,7 +187,7 @@ PORTAL_MAGIC_LINK_EXPIRY_HOURS = int(os.getenv('PORTAL_MAGIC_LINK_EXPIRY_HOURS',
 STALLED_DEAL_THRESHOLD_DAYS = 14
 DISCOUNT_ANOMALY_THRESHOLD_PCT = 5.0
 
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+FRONTEND_URL = frontend_url
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'no-referrer'
 SESSION_COOKIE_HTTPONLY = True
@@ -160,8 +201,8 @@ X_FRAME_OPTIONS = 'DENY'
 if not DEBUG and (SECRET_KEY.startswith('django-insecure') or len(SECRET_KEY) < 50):
     raise RuntimeError('Set a strong DJANGO_SECRET_KEY before production startup.')
 
-# When enabled, the backend must be private behind the trusted TLS proxy.
-if os.getenv('TRUST_PROXY', '0') == '1':
+# Reverse proxy TLS header
+if os.getenv('TRUST_PROXY', '0') == '1' or os.getenv('RENDER_EXTERNAL_HOSTNAME'):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 DATA_UPLOAD_MAX_MEMORY_SIZE = 1048576
 REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] = ['rest_framework.renderers.JSONRenderer']
@@ -169,10 +210,14 @@ REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] = ['rest_framework.renderers.JSONRend
 # Shared throttling across production workers. Redis has no public port.
 if os.getenv('REDIS_URL'):
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': os.environ['REDIS_URL']}}
-CSRF_TRUSTED_ORIGINS = [FRONTEND_URL]
+
+CSRF_TRUSTED_ORIGINS = [o for o in cors_origins if o.startswith(('http://', 'https://'))]
+if render_host:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{render_host}')
+
 AUTH_PASSWORD_VALIDATORS[1]['OPTIONS'] = {'min_length': 10}
 
-if not DEBUG and len(os.getenv('POSTGRES_PASSWORD','')) < 16:
+if not DEBUG and not DATABASE_URL and not USE_SQLITE and len(os.getenv('POSTGRES_PASSWORD', '')) < 16:
     raise RuntimeError('Production requires a database password of at least 16 characters.')
 if os.getenv('TRUST_PROXY') == '1':
     REST_FRAMEWORK['NUM_PROXIES'] = 1
