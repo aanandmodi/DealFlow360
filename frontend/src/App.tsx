@@ -11,6 +11,8 @@ import { ApprovalDetailPage } from './features/approval/ApprovalDetailPage';
 import { SalesDashboard } from './features/dashboard/SalesDashboard';
 import { DealHealthDashboard } from './features/dashboard/DealHealthDashboard';
 import { PortalNegotiationPage } from './features/portal-negotiation/PortalNegotiationPage';
+import { FulfillmentPage } from './features/fulfillment/FulfillmentPage';
+import { BillingPage } from './features/billing/BillingPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -74,9 +76,9 @@ function AppRoutes() {
               <Route path="/quotations/:id" element={<QuotationBuilderPage />} />
               <Route path="/approvals" element={<ApprovalListPage />} />
               <Route path="/approvals/:id" element={<ApprovalDetailPage />} />
-              <Route path="/fulfillment" element={<PlaceholderPage title="Fulfillment — Warehouse Split (B6)" />} />
-              <Route path="/subscriptions" element={<PlaceholderPage title="Subscriptions — Billing (B7)" />} />
-              <Route path="/invoices" element={<PlaceholderPage title="Invoices" />} />
+              <Route path="/fulfillment" element={<FulfillmentPage />} />
+              <Route path="/subscriptions" element={<BillingPage />} />
+              <Route path="/invoices" element={<BillingPage />} />
               <Route path="/deal-health" element={<DealHealthDashboard />} />
               <Route path="/reports" element={<PlaceholderPage title="Reports — Executive Analytics" />} />
               <Route path="/config" element={<PlaceholderPage title="Products & Config — use /admin/ for Django Admin" />} />
