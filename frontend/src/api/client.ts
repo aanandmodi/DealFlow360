@@ -1,4 +1,4 @@
-const RAW_BASE = (import.meta as any).env?.VITE_API_URL || '';
+const RAW_BASE = (import.meta as any).env?.VITE_API_URL || (import.meta.env.PROD ? 'https://dealflow360-ycs6.onrender.com' : '');
 const BASE_URL = RAW_BASE ? (RAW_BASE.endsWith('/api') ? RAW_BASE : `${RAW_BASE.replace(/\/$/, '')}/api`) : '/api';
 
 export class ApiClient {

@@ -214,6 +214,7 @@ if os.getenv('REDIS_URL'):
 CSRF_TRUSTED_ORIGINS = [o for o in cors_origins if o.startswith(('http://', 'https://'))]
 if render_host:
     CSRF_TRUSTED_ORIGINS.append(f'https://{render_host}')
+CSRF_TRUSTED_ORIGINS.append('https://*.vercel.app')
 
 AUTH_PASSWORD_VALIDATORS[1]['OPTIONS'] = {'min_length': 10}
 

@@ -48,6 +48,8 @@ pgdata/
 
 .env.*
 !.env.example
+!.env.production
+!frontend/.env.production
 *_dump.json
 *.dump
 *.backup
