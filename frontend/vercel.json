@@ -7,7 +7,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://dealflow360-yca6.onrender.com/api/:path*"
+      "destination": "https://dealflow360-ycs6.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
