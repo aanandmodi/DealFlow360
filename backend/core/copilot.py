@@ -673,17 +673,18 @@ def call_groq_api(messages: list) -> str:
             api_key = os.getenv('GROQ_API_KEY', '')
         except Exception:
             pass
-    configured_model = os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')
+    configured_model = os.getenv('GROQ_MODEL', 'qwen/qwen3.8-27b')
 
     candidate_models = [
         configured_model,
+        'qwen/qwen3.8-27b',
+        'qwen/qwen3.6-27b',
+        'openai/gpt-oss-120b',
+        'openai/gpt-oss-20b',
         'llama-3.3-70b-versatile',
-        'llama-3.1-70b-versatile',
-        'llama3-70b-8192',
-        'mixtral-8x7b-32768',
     ]
     seen = set()
-    models_to_try = [m for m in candidate_models if not (m in seen or seen.add(m))]
+    models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
 
     last_error = ""
     for model_name in models_to_try:
