@@ -1,0 +1,8 @@
+{
+  "name": "dealflow360-frontend-alias",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"const fs=require('fs');const {execSync}=require('child_process');execSync('npm run build',{cwd:'..',stdio:'inherit'});fs.cpSync('../dist','./dist',{recursive:true});\""
+  }
+}
