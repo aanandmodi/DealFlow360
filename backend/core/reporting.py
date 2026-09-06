@@ -100,7 +100,15 @@ def quotation_pdf(request, pk):
     token_str = str(active_token.token) if active_token else (q.portal_token or '')
     
     sig = generate_quotation_signature(q)
-    frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    origin = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER') or ''
+    if origin and 'vercel.app' in origin:
+        from urllib.parse import urlparse
+        p = urlparse(origin)
+        frontend_base = f"{p.scheme}://{p.netloc}"
+    else:
+        frontend_base = getattr(settings, 'FRONTEND_URL', 'https://deal-flow360-omega.vercel.app').rstrip('/')
+        if 'dealflow360.vercel.app' in frontend_base:
+            frontend_base = 'https://deal-flow360-omega.vercel.app'
     verify_url = f"{frontend_base}/verify/{q.quote_number}?sig={sig}"
     if token_str:
         verify_url += f"&token={token_str}"

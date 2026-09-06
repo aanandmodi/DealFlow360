@@ -12,9 +12,19 @@ from core.verification import generate_quotation_signature
 from quotations.models import Quotation, ApprovalLog
 
 
-def get_quotation_links(quotation):
+def get_quotation_links(quotation, request=None):
     """Constructs direct frontend verification and customer negotiation portal URLs."""
-    frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    origin = ''
+    if request:
+        origin = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER') or ''
+    if origin and 'vercel.app' in origin:
+        from urllib.parse import urlparse
+        p = urlparse(origin)
+        frontend_base = f"{p.scheme}://{p.netloc}"
+    else:
+        frontend_base = getattr(settings, 'FRONTEND_URL', 'https://deal-flow360-omega.vercel.app').rstrip('/')
+        if 'dealflow360.vercel.app' in frontend_base:
+            frontend_base = 'https://deal-flow360-omega.vercel.app'
     sig = generate_quotation_signature(quotation)
     token = quotation.portal_token or ''
     

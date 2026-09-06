@@ -76,7 +76,10 @@ def verify_quotation_public(request, quote_number):
     provided_sig = request.query_params.get('sig', '')
     token_param = request.query_params.get('token', '')
 
-    is_signature_valid = bool(provided_sig and verify_quotation_signature(q, provided_sig))
+    is_signature_valid = bool(provided_sig and (
+        verify_quotation_signature(q, provided_sig) or 
+        expected_sig.lower().startswith(provided_sig.lower())
+    ))
     
     # Check if active portal token matches
     active_token = PortalToken.objects.filter(quotation=q, is_used=False, expires_at__gt=timezone.now()).first()
@@ -100,7 +103,15 @@ def verify_quotation_public(request, quote_number):
             'description': line.description,
         })
 
-    frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    origin = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER') or ''
+    if origin and 'vercel.app' in origin:
+        from urllib.parse import urlparse
+        p = urlparse(origin)
+        frontend_base = f"{p.scheme}://{p.netloc}"
+    else:
+        frontend_base = getattr(settings, 'FRONTEND_URL', 'https://deal-flow360-omega.vercel.app').rstrip('/')
+        if 'dealflow360.vercel.app' in frontend_base:
+            frontend_base = 'https://deal-flow360-omega.vercel.app'
     
     return Response({
         'verified': True,

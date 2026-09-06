@@ -171,7 +171,9 @@ SIMPLE_JWT = {
 
 # CORS & CSRF
 cors_origins = [h.strip() for h in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
-frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173').strip()
+frontend_url = os.getenv('FRONTEND_URL', 'https://deal-flow360-omega.vercel.app').strip()
+if 'dealflow360.vercel.app' in frontend_url:
+    frontend_url = 'https://deal-flow360-omega.vercel.app'
 if frontend_url and frontend_url not in cors_origins:
     cors_origins.append(frontend_url)
 CORS_ALLOWED_ORIGINS = cors_origins
