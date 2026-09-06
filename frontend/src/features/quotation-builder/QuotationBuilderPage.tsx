@@ -8,7 +8,7 @@
  * - Approval chain pathway
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -34,6 +34,104 @@ import { UpsellPanel } from '../upsell-panel/UpsellPanel';
 import { BulkImportModal } from '../pipeline/BulkImportModal';
 import { QuotationDispatchModal } from '../pipeline/QuotationDispatchModal';
 import { FileSpreadsheet } from 'lucide-react';
+
+interface LineDiscountInputProps {
+  initialValue: number | string;
+  productName: string;
+  onSave: (val: number) => void;
+  disabled?: boolean;
+}
+
+function LineDiscountInput({
+  initialValue,
+  productName,
+  onSave,
+  disabled,
+}: LineDiscountInputProps) {
+  const numInitial = parseFloat(String(initialValue ?? 0)) || 0;
+  const [val, setVal] = useState<string>(String(numInitial));
+  const [isFocused, setIsFocused] = useState(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isFocused) {
+      const parsed = parseFloat(String(initialValue ?? 0)) || 0;
+      setVal(String(parsed));
+    }
+  }, [initialValue, isFocused]);
+
+  const commit = useCallback((valueToCommit?: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const targetStr = valueToCommit !== undefined ? valueToCommit : val;
+    if (targetStr.trim() === '') {
+      const currentInitial = parseFloat(String(initialValue ?? 0)) || 0;
+      setVal(String(currentInitial));
+      return;
+    }
+    const parsed = parseFloat(targetStr);
+    if (isNaN(parsed) || parsed < 0) {
+      const currentInitial = parseFloat(String(initialValue ?? 0)) || 0;
+      setVal(String(currentInitial));
+      return;
+    }
+    const clamped = Math.min(100, Math.max(0, parsed));
+    setVal(String(clamped));
+    const currentInitial = parseFloat(String(initialValue ?? 0)) || 0;
+    if (clamped !== currentInitial) {
+      onSave(clamped);
+    }
+  }, [val, initialValue, onSave]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextVal = e.target.value;
+    setVal(nextVal);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      commit(nextVal);
+    }, 600);
+  };
+
+  return (
+    <div className="inline-flex items-center justify-center">
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="0.5"
+        value={val}
+        disabled={disabled}
+        aria-label={`${productName} discount percent`}
+        onFocus={() => setIsFocused(true)}
+        onChange={handleChange}
+        onBlur={() => {
+          setIsFocused(false);
+          commit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commit();
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            if (debounceTimerRef.current) {
+              clearTimeout(debounceTimerRef.current);
+            }
+            const currentInitial = parseFloat(String(initialValue ?? 0)) || 0;
+            setVal(String(currentInitial));
+            setIsFocused(false);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className="w-16 h-7 text-center border border-slate-300 rounded font-mono text-xs focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 bg-white"
+      />
+    </div>
+  );
+}
 
 export function QuotationBuilderPage() {
   const { id } = useParams();
@@ -97,14 +195,25 @@ export function QuotationBuilderPage() {
   });
 
   const updateLineMutation = useMutation({
-    mutationFn: ({ lineId, ...data }: { lineId: number; quantity?: number; discount_percent?: number }) =>
-      updateLine(Number(id), lineId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotation', id] }),
+    mutationFn: ({ lineId, ...data }: { lineId: number; quantity?: number; discount_percent?: number; discount_pct?: number }) => {
+      const payload: any = { ...data };
+      if (data.discount_percent !== undefined) {
+        payload.discount_pct = data.discount_percent;
+      }
+      return updateLine(Number(id), lineId, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+    },
   });
 
   const deleteLineMutation = useMutation({
     mutationFn: (lineId: number) => deleteLine(Number(id), lineId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotation', id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+    },
   });
 
   const submitMutation = useMutation({
@@ -120,9 +229,18 @@ export function QuotationBuilderPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quotation', id] }),
   });
 
-  const share=useMutation({mutationFn:()=>ApiClient.post<{link:string}>('/auth/portal/request-magic-link/',{quotation_id:Number(id)}),onSuccess:r=>{setPortalLink(r.link);queryClient.invalidateQueries();}});
+  const share=useMutation({mutationFn:()=>ApiClient.post<{link:string}>('/auth/portal/request-magic-link/',{quotation_id:Number(id)}),onSuccess:r=>{setPortalLink(r.link);queryClient.invalidateQueries({ queryKey: ['quotation', id] });}});
   const pdf=useMutation({mutationFn:()=>downloadFile(`/quotations/${id}/pdf/`,`${quotation?.quote_number}.pdf`)});
-  const discountAll=useMutation({mutationFn:()=>ApiClient.post(`/quotations/${id}/order-discount/`,{discount_percent:Number(orderDiscount)}),onSuccess:()=>queryClient.invalidateQueries()});
+  const discountAll=useMutation({
+    mutationFn:()=>{
+      const pct = parseFloat(orderDiscount) || 0;
+      return ApiClient.post(`/quotations/${id}/order-discount/`,{discount_percent:pct,discount_pct:pct});
+    },
+    onSuccess:()=>{
+      queryClient.invalidateQueries({ queryKey: ['quotation', id] });
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+    }
+  });
   // === Handlers ===
   const handleCreateQuotation = useCallback(() => {
     if (!selectedCustomer) return;
@@ -140,8 +258,8 @@ export function QuotationBuilderPage() {
   }, [updateLineMutation]);
 
   const handleDiscountChange = useCallback((lineId: number, discount_percent: number) => {
-    if (discount_percent < 0 || discount_percent > 100) return;
-    updateLineMutation.mutate({ lineId, discount_percent });
+    if (isNaN(discount_percent) || discount_percent < 0 || discount_percent > 100) return;
+    updateLineMutation.mutate({ lineId, discount_percent, discount_pct: discount_percent });
   }, [updateLineMutation]);
 
   const isDraft = !quotation || quotation.status === 'draft';
@@ -518,14 +636,11 @@ export function QuotationBuilderPage() {
                         <td className="px-6 py-4 text-right font-mono text-slate-700">{formatCurrency(line.unit_price)}</td>
                         <td className="px-6 py-4 text-center">
                           {canEdit ? (
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.5"
-                              value={line.discount_percent}
-                              aria-label={`${line.product_name} discount percent`} onChange={e => handleDiscountChange(line.id, parseFloat(e.target.value) || 0)}
-                              className="w-16 h-7 text-center border border-slate-300 rounded font-mono text-xs focus:outline-none focus:border-primary"
+                            <LineDiscountInput
+                              initialValue={line.discount_percent}
+                              productName={line.product_name}
+                              onSave={(val) => handleDiscountChange(line.id, val)}
+                              disabled={updateLineMutation.isPending}
                             />
                           ) : (
                             <span className="font-mono font-semibold text-slate-800">{formatPercent(line.discount_percent)}</span>
@@ -599,7 +714,49 @@ export function QuotationBuilderPage() {
               </div>
             </div>
 
-            {canEdit&&<form className="panel p-5" onSubmit={e=>{e.preventDefault();discountAll.mutate();}}><label>Order-wide discount (%)<input type="number" min="0" max="100" step="0.01" value={orderDiscount} onChange={e=>setOrderDiscount(e.target.value)}/></label><button className="btn btn-secondary mt-3" disabled={discountAll.isPending}>Apply to all lines</button></form>}
+            {canEdit && (
+              <form
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium space-y-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const num = parseFloat(orderDiscount);
+                  if (isNaN(num) || num < 0 || num > 100) return;
+                  discountAll.mutate();
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <label htmlFor="order-wide-discount-input" className="font-outfit text-sm font-bold text-slate-900">
+                    Order-wide discount (%)
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">0% - 100%</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    id="order-wide-discount-input"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={orderDiscount}
+                    onChange={(e) => setOrderDiscount(e.target.value)}
+                    placeholder="0"
+                    className="flex-1 h-9 px-3 rounded-lg border border-slate-300 font-mono text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-secondary h-9 px-4 text-xs font-semibold whitespace-nowrap cursor-pointer hover:bg-slate-800 transition-colors"
+                    disabled={discountAll.isPending || lines.length === 0}
+                  >
+                    {discountAll.isPending ? 'Applying...' : 'Apply to all lines'}
+                  </button>
+                </div>
+                {discountAll.isSuccess && (
+                  <div className="text-xs text-emerald-600 font-medium">
+                    ✓ Discount applied to all lines
+                  </div>
+                )}
+              </form>
+            )}
             {/* Margin & Risk */}
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium space-y-4">
               <h3 className="font-outfit text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
