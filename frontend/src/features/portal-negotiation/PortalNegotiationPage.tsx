@@ -7,7 +7,14 @@ import {downloadQuotationPdf} from '../../api/quotations';
 import {formatCurrency,getStatusLabel,formatDateTime} from '../../lib/utils';
 import {Notice,Empty,Loading} from '../workspace/shared';
 export function PortalNegotiationPage(){
- const {token}=useParams();const qc=useQueryClient();const [message,setMessage]=useState('');const [line,setLine]=useState('');const [discount,setDiscount]=useState('');
+ const params=useParams();const qc=useQueryClient();const [message,setMessage]=useState('');const [line,setLine]=useState('');const [discount,setDiscount]=useState('');
+ // Extract token from useParams, or fallback to parsing the URL pathname directly
+ const token = params.token || (() => {
+   const segments = window.location.pathname.split('/').filter(Boolean);
+   // Match /portal/quotations/<token> or /portal/quotation/<token>
+   const idx = segments.findIndex(s => s === 'quotations' || s === 'quotation');
+   return idx >= 0 && idx + 1 < segments.length ? segments[idx + 1] : undefined;
+ })();
  const query=useQuery({queryKey:['portal',token],queryFn:()=>portalApi.getQuotation(token!),enabled:!!token,retry:false,refetchInterval:15000});
  const q=query.data;const invalidate=()=>qc.invalidateQueries({queryKey:['portal',token]});
  const comment=useMutation({mutationFn:()=>portalApi.comment(q!.id,message,line?Number(line):undefined),onSuccess:()=>{setMessage('');invalidate();}});
